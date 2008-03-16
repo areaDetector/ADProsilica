@@ -7,8 +7,8 @@ include $(TOP)/configure/CONFIG
 #USR_CFLAGS += 
 #USR_CXXFLAGS +=
 
-LIBRARY_IOC_WIN32 += prosilicaCCD
-LIBRARY_IOC_cygwin32 += prosilicaCCD
+LIBRARY_IOC_WIN32 += prosilica
+LIBRARY_IOC_cygwin32 += prosilica
 LIB_SRCS += drvProsilica.c
 LIB_LIBS += PvAPI
 LIB_LIBS += ccd
@@ -27,20 +27,20 @@ LIB_INSTALLS_cygwin32 += ../PvAPI.lib
 PROD_IOC_WIN32 += prosilicaCCDApp
 PROD_IOC_cygwin32 += prosilicaCCDApp
 # <name>.dbd will be created from <name>Include.dbd
-DBD += prosilicaCCDApp.dbd
-DBD += prosilicaCCDSupport.dbd
+DBD += prosilicaApp.dbd
+DBD += prosilicaSupport.dbd
 
 # <name>_registerRecordDeviceDriver.cpp will be created from <name>.dbd
-prosilicaCCDApp_SRCS_DEFAULT += prosilicaCCDApp_registerRecordDeviceDriver.cpp prosilicaCCDMain.cpp
-prosilicaCCDApp_SRCS_vxWorks += prosilicaCCDApp_registerRecordDeviceDriver.cpp
+prosilicaApp_SRCS_DEFAULT += prosilicaApp_registerRecordDeviceDriver.cpp prosilicaAppMain.cpp
+prosilicaApp_SRCS_vxWorks += prosilicaApp_registerRecordDeviceDriver.cpp
 
 # Add locally compiled object code
-prosilicaCCDApp_LIBS += prosilicaCCD
-prosilicaCCDApp_LIBS += PvAPI
-prosilicaCCDApp_LIBS += ccd
-prosilicaCCDApp_LIBS += sscan autosave 
-prosilicaCCDApp_LIBS += asyn
-prosilicaCCDApp_LIBS += $(EPICS_BASE_IOC_LIBS)
+prosilicaApp_LIBS += prosilica
+prosilicaApp_LIBS += PvAPI
+prosilicaApp_LIBS += areaDetector
+prosilicaApp_LIBS += sscan autosave 
+prosilicaApp_LIBS += asyn
+prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
 
 prosilicaCCDApp_SYS_LIBS_cygwin32 += rpc
 
