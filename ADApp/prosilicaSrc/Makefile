@@ -24,8 +24,8 @@ LIB_INSTALLS_WIN32    += ../PvAPI.lib
 LIB_INSTALLS_cygwin32 += ../PvAPI.lib
 
 #==================================
-PROD_IOC_WIN32 += prosilicaCCDApp
-PROD_IOC_cygwin32 += prosilicaCCDApp
+PROD_IOC_WIN32 += prosilicaApp
+PROD_IOC_cygwin32 += prosilicaApp
 # <name>.dbd will be created from <name>Include.dbd
 DBD += prosilicaApp.dbd
 DBD += prosilicaSupport.dbd
@@ -41,8 +41,6 @@ prosilicaApp_LIBS += areaDetector
 prosilicaApp_LIBS += sscan autosave 
 prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
-
-prosilicaCCDApp_SYS_LIBS_cygwin32 += rpc
 
 #=============================
 
