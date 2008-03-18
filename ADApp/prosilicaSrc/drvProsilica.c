@@ -27,12 +27,23 @@
 /* If we have any private driver commands they begin with ADFirstDriverCommand and should end
    with ADLastDriverCommand, which is used for setting the size of the parameter library table */
    
-/* These parameters are not currently used, but will be when we implement detector-specific commands */
 typedef enum {
-   ADTrigger1 = ADFirstDriverParam,
-   ADTrigger2,
+   PSTrigger1 = ADFirstDriverParam,
+   PSTrigger2,
    ADLastDriverParam
-} prosilicaParams;
+} PSParam_t;
+
+/* This structure and array are used for conveniently looking up commands in ADFindParam() */
+typedef struct {
+    PSParam_t command;
+    char *commandString;
+} PSCommandStruct;
+
+static PSCommandStruct PSCommands[] = {
+    {PSTrigger1,   "TRIGGER1"},  
+    {PSTrigger2,   "TRIGGER1"}  
+};
+
 
 ADDrvSET_t ADProsilica = 
   {
@@ -42,6 +53,7 @@ ADDrvSET_t ADProsilica =
     ADSetLog,            /* Defines an external logging function (optional) */
     ADOpen,              /* Driver open function */
     ADClose,             /* Driver close function */
+    ADFindParam,         /* Parameter lookup function */
     ADSetInt32Callback,     /* Provides a callback function the driver can call when an int32 value updates */
     ADSetFloat64Callback,   /* Provides a callback function the driver can call when a float64 value updates */
     ADSetImageDataCallback, /* Provides a callback function the driver can call when the image data updates */
@@ -155,6 +167,20 @@ static DETECTOR_HDL ADOpen(int card, char * param)
 static int ADClose(DETECTOR_HDL pCamera)
 {
     return AREA_DETECTOR_OK;
+}
+
+static int ADFindParam( DETECTOR_HDL pDetector, const char *paramString, int *function )
+{
+    int i;
+    int ncommands = sizeof(PSCommands)/sizeof(PSCommands[0]);
+
+    for (i=0; i < ncommands; i++) {
+        if (epicsStrCaseCmp(paramString, PSCommands[i].commandString) == 0) {
+            *function = PSCommands[i].command;
+            return AREA_DETECTOR_OK;
+        }
+    }
+    return AREA_DETECTOR_ERROR;
 }
 
 static int ADSetInt32Callback(DETECTOR_HDL pCamera, ADInt32CallbackFunc callback, void * param)
@@ -322,7 +348,7 @@ static int ADSetInteger(DETECTOR_HDL pCamera, ADParam_t function, int value)
     case ADSizeX:
     case ADMinY:
     case ADSizeY:
-        /* These command change the chip readout geometry.  We need to cache them and apply them in the
+        /* These commands change the chip readout geometry.  We need to cache them and apply them in the
          * correct order */
         status |= ADSetGeometry(pCamera);
         break;
