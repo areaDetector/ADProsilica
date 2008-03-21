@@ -316,7 +316,7 @@ static ADReadParameters(DETECTOR_HDL pCamera)
     return(status);
 }
 
-static int ADGetInteger(DETECTOR_HDL pCamera, ADParam_t function, int * value)
+static int ADGetInteger(DETECTOR_HDL pCamera, int function, int * value)
 {
     int status = AREA_DETECTOR_OK;
     
@@ -330,7 +330,7 @@ static int ADGetInteger(DETECTOR_HDL pCamera, ADParam_t function, int * value)
     return(status);
 }
 
-static int ADSetInteger(DETECTOR_HDL pCamera, ADParam_t function, int value)
+static int ADSetInteger(DETECTOR_HDL pCamera, int function, int value)
 {
     int status = AREA_DETECTOR_OK;
     tPvUint32 intVal = value;
@@ -396,7 +396,7 @@ static int ADSetInteger(DETECTOR_HDL pCamera, ADParam_t function, int value)
         }
         break;
     default:
-        status |= AREA_DETECTOR_ERROR;
+        break;
     }
     
     /* Read the camera parameters and do callbacks */
@@ -408,7 +408,7 @@ static int ADSetInteger(DETECTOR_HDL pCamera, ADParam_t function, int value)
 }
 
 
-static int ADGetDouble(DETECTOR_HDL pCamera, ADParam_t function, double * value)
+static int ADGetDouble(DETECTOR_HDL pCamera, int function, double * value)
 {
     int status = AREA_DETECTOR_OK;
     
@@ -417,13 +417,12 @@ static int ADGetDouble(DETECTOR_HDL pCamera, ADParam_t function, double * value)
     /* We just read the current value of the parameter from the parameter library.
      * Those values are updated whenever anything could cause them to change */
     status = ADParam->getDouble(pCamera->params, function, value);
-
     if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADGetDouble error, status=%d, function=%d, value=%f\n", 
                       status, function, *value);
     return(status);
 }
 
-static int ADSetDouble(DETECTOR_HDL pCamera, ADParam_t function, double value)
+static int ADSetDouble(DETECTOR_HDL pCamera, int function, double value)
 {
     int status = AREA_DETECTOR_OK;
     tPvUint32 intVal;
@@ -453,7 +452,7 @@ static int ADSetDouble(DETECTOR_HDL pCamera, ADParam_t function, double value)
         status |= PvAttrUint32Set(pCamera->PvHandle, "GainValue", intVal);
         break;
     default:
-        status |= AREA_DETECTOR_ERROR;
+        break;
     }
 
     /* Read the camera parameters and do callbacks */
@@ -464,7 +463,7 @@ static int ADSetDouble(DETECTOR_HDL pCamera, ADParam_t function, double value)
     return status;
 }
 
-static int ADGetString(DETECTOR_HDL pCamera, ADParam_t function, int maxChars, char * value)
+static int ADGetString(DETECTOR_HDL pCamera, int function, int maxChars, char * value)
 {
     int status = AREA_DETECTOR_OK;
    
@@ -479,16 +478,15 @@ static int ADGetString(DETECTOR_HDL pCamera, ADParam_t function, int maxChars, c
     return(status);
 }
 
-static int ADSetString(DETECTOR_HDL pCamera, ADParam_t function, const char *value)
+static int ADSetString(DETECTOR_HDL pCamera, int function, const char *value)
 {
     int status = AREA_DETECTOR_OK;
 
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
     switch (function) {
     default:
-        return AREA_DETECTOR_ERROR;
+        break;
     }
-    status = AREA_DETECTOR_OK;
     if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADGetString error, status=%d, function=%d, value=%s\n", 
                       status, function, value);
     return status;
@@ -716,6 +714,8 @@ int prosilicaConfig(int camera,     /* Camera number */
     status |= ADParam->setInteger(pCamera->params, ADAcquire, 0);
     status |= ADParam->setInteger(pCamera->params, ADSizeX, pCamera->sensorWidth);
     status |= ADParam->setInteger(pCamera->params, ADSizeY, pCamera->sensorHeight);
+    status |= ADParam->setInteger(pCamera->params, ADMaxSizeX, pCamera->sensorWidth);
+    status |= ADParam->setInteger(pCamera->params, ADMaxSizeY, pCamera->sensorHeight);
     if (status) {
         printf("prosilicaConfig: unable to set camera string parameters\n");
         return AREA_DETECTOR_ERROR;
