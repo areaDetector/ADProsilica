@@ -20,7 +20,7 @@
 
 #define DEFINE_AREA_DETECTOR_PROTOTYPES 1
 #include "ADParamLib.h"
-#include "areaDetectorInterface.h"
+#include "ADInterface.h"
 #include "drvProsilica.h"
 #include "PvAPI.h"
 
@@ -45,7 +45,7 @@ static PSCommandStruct PSCommands[] = {
 };
 
 
-ADDrvSET_t ADProsilica = 
+ADDrvSet_t ADProsilica = 
   {
     18,
     ADReport,            /* Standard EPICS driver report function (optional) */
@@ -56,6 +56,7 @@ ADDrvSET_t ADProsilica =
     ADFindParam,         /* Parameter lookup function */
     ADSetInt32Callback,     /* Provides a callback function the driver can call when an int32 value updates */
     ADSetFloat64Callback,   /* Provides a callback function the driver can call when a float64 value updates */
+    ADSetStringCallback,    /* Provides a callback function the driver can call when a float64 value updates */
     ADSetImageDataCallback, /* Provides a callback function the driver can call when the image data updates */
     ADGetInteger,        /* Pointer to function to get an integer value */
     ADSetInteger,        /* Pointer to function to set an integer value */
@@ -201,6 +202,17 @@ static int ADSetFloat64Callback(DETECTOR_HDL pCamera, ADFloat64CallbackFunc call
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
     
     status = ADParam->setDoubleCallback(pCamera->params, callback, param);
+    
+    return(status);
+}
+
+static int ADSetStringCallback(DETECTOR_HDL pCamera, ADStringCallbackFunc callback, void * param)
+{
+    int status = AREA_DETECTOR_OK;
+    
+    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    
+    status = ADParam->setStringCallback(pCamera->params, callback, param);
     
     return(status);
 }
