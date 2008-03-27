@@ -21,6 +21,7 @@
 #define DEFINE_AREA_DETECTOR_PROTOTYPES 1
 #include "ADParamLib.h"
 #include "ADInterface.h"
+#include "ADUtils.h"
 #include "drvProsilica.h"
 #include "PvAPI.h"
 
@@ -31,19 +32,20 @@ typedef enum {
    PSTrigger1 = ADFirstDriverParam,
    PSTrigger2,
    ADLastDriverParam
-} PSParam_t;
+} DetParam_t;
 
 /* This structure and array are used for conveniently looking up commands in ADFindParam() */
 typedef struct {
-    PSParam_t command;
+    DetParam_t command;
     char *commandString;
-} PSCommandStruct;
+} DetCommandStruct;
 
-static PSCommandStruct PSCommands[] = {
+static DetCommandStruct DetCommands[] = {
     {PSTrigger1,   "TRIGGER1"},  
     {PSTrigger2,   "TRIGGER1"}  
 };
 
+static char *driverName = "drvProsilica";
 
 ADDrvSet_t ADProsilica = 
   {
@@ -76,7 +78,7 @@ typedef struct ADHandle {
     /* The first set of items in this structure will be needed by all drivers */
     int camera;                        /* Index of this camera in list of controlled cameras */
     int wasFound;                      /* 1 if camera was found 0 if not */
-    epicsMutexId prosilicaLock;        /* A Mutex to lock access to data structures. */
+    epicsMutexId mutexId;              /* A Mutex to lock access to data structures. */
     ADLogFunc logFunc;                 /* These are for error and debug logging.*/
     void *logParam;
     PARAMS params;
@@ -96,136 +98,61 @@ typedef struct ADHandle {
     int sensorHeight;
 } camera_t;
 
-static int ADLogMsg(void * param, const ADLogMask_t logMask, const char *pFormat, ...);
 static void PVDECL frameCallback(tPvFrame *frame);
 
 #define PRINT   (pCamera->logFunc)
-#define TRACE_FLOW    ADTraceFlow
-#define TRACE_ERROR   ADTraceError
-#define TRACE_IODRIVER  ADTraceIODriver
 
 static int numCameras;
 
 /* Pointer to array of controller strutures */
 static camera_t *allCameras=NULL;
 
-static void ADReport(int level)
-{
-    int i;
-    DETECTOR_HDL pCamera;
-
-    for(i=0; i<numCameras; i++) {
-        pCamera = &allCameras[i];
-        printf("Prosilica camera %d IP address=%s\n", i, pCamera->IPAddress);
-        if (level > 0) {
-            printf("  ID:                %ul\n", pCamera->PvCameraInfo.UniqueId);
-            printf("  Serial number:     %s\n",  pCamera->PvCameraInfo.SerialString);
-            printf("  Model:             %s\n",  pCamera->PvCameraInfo.DisplayName);
-            printf("  Sensor type:       %s\n",  pCamera->sensorType);
-            printf("  Sensor bits:       %d\n",  pCamera->sensorBits);
-            printf("  Sensor width:      %d\n",  pCamera->sensorWidth);
-            printf("  Sensor height:     %d\n",  pCamera->sensorHeight);
-            printf("  Frame buffer size: %d\n",  pCamera->frame[0].ImageBufferSize);
-        }
-        if (level > 5) {
-            printf("\nParameter library contents:\n");
-            ADParam->dump(pCamera->params);
-        }
-    }   
-}
-
-
-static int ADInit(void)
-{
-    return AREA_DETECTOR_OK;
-}
-
-static int ADSetLog( DETECTOR_HDL pCamera, ADLogFunc logFunc, void * param )
-{
-    if (logFunc == NULL)
-    {
-        pCamera->logFunc=ADLogMsg;
-        pCamera->logParam = NULL;
-    }
-    else
-    {
-        pCamera->logFunc=logFunc;
-        pCamera->logParam = param;
-    }
-    return AREA_DETECTOR_OK;
-}
-
-static DETECTOR_HDL ADOpen(int card, char * param)
-{
-    DETECTOR_HDL pCamera;
-
-    if (card >= numCameras) return(NULL);
-    pCamera = &allCameras[card];
-    if (pCamera->wasFound == 0) return(NULL);
-    return pCamera;
-}
-
-static int ADClose(DETECTOR_HDL pCamera)
-{
-    return AREA_DETECTOR_OK;
-}
-
-static int ADFindParam( DETECTOR_HDL pDetector, const char *paramString, int *function )
-{
-    int i;
-    int ncommands = sizeof(PSCommands)/sizeof(PSCommands[0]);
-
-    for (i=0; i < ncommands; i++) {
-        if (epicsStrCaseCmp(paramString, PSCommands[i].commandString) == 0) {
-            *function = PSCommands[i].command;
-            return AREA_DETECTOR_OK;
-        }
-    }
-    return AREA_DETECTOR_ERROR;
-}
-
-static int ADSetInt32Callback(DETECTOR_HDL pCamera, ADInt32CallbackFunc callback, void * param)
+
+static void PVDECL frameCallback(tPvFrame *pFrame)
 {
     int status = AREA_DETECTOR_OK;
+    ADDataType_t dataType;
+    DETECTOR_HDL pCamera = (DETECTOR_HDL) pFrame->Context[0];
     
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
+     /* Call the callback function for image data */
+    if (pCamera->pImageDataCallback) {
+        /* Convert from the PvApi data types to ADDataType */
+        switch(pFrame->Format) {
+        case ePvFmtMono8:
+        case ePvFmtBayer8:
+            dataType = ADUInt8;
+            break;
+        case ePvFmtMono16:
+        case ePvFmtBayer16:
+            dataType = ADUInt16;
+            break;
+        default:
+            /* Note, this is wrong it does not work for ePvFmtRgb48, which is 48 bits */
+            dataType = ADUInt32;
+        }
+        pCamera->pImageDataCallback(pCamera->imageDataCallbackParam, 
+                                    (void *)pFrame->ImageBuffer,
+                                    dataType, pFrame->Width, pFrame->Height);
+    }
+
+    /* Set pointer that ADGetImage uses */
+    pCamera->lastFrame = pFrame;
     
-    status = ADParam->setIntCallback(pCamera->params, callback, param);
-    
-    return(status);
+    /* See if acquisition is done */
+    if (pCamera->framesRemaining > 0) pCamera->framesRemaining--;
+    if (pCamera->framesRemaining == 0) {
+        ADParam->setInteger(pCamera->params, ADAcquire, 0);
+        ADParam->setInteger(pCamera->params, ADStatus, ADStatusIdle);
+        ADParam->callCallbacks(pCamera->params);
+    }
+
+    /* Queue this frame to run again */
+    status = PvCaptureQueueFrame(pCamera->PvHandle, pFrame, frameCallback); 
+    epicsMutexUnlock(pCamera->mutexId);
 }
 
-static int ADSetFloat64Callback(DETECTOR_HDL pCamera, ADFloat64CallbackFunc callback, void * param)
-{
-    int status = AREA_DETECTOR_OK;
-    
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    
-    status = ADParam->setDoubleCallback(pCamera->params, callback, param);
-    
-    return(status);
-}
-
-static int ADSetStringCallback(DETECTOR_HDL pCamera, ADStringCallbackFunc callback, void * param)
-{
-    int status = AREA_DETECTOR_OK;
-    
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    
-    status = ADParam->setStringCallback(pCamera->params, callback, param);
-    
-    return(status);
-}
-
-static int ADSetImageDataCallback(DETECTOR_HDL pCamera, ADImageDataCallbackFunc callback, void * param)
-{
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    pCamera->pImageDataCallback = callback;
-    pCamera->imageDataCallbackParam = param;
-    return AREA_DETECTOR_OK;
-}
-
-static int ADSetGeometry(DETECTOR_HDL pCamera)
+static int PSSetGeometry(DETECTOR_HDL pCamera)
 {
     int status = AREA_DETECTOR_OK;
     tPvUint32 binX, binY, minY, minX, sizeX, sizeY;
@@ -245,11 +172,13 @@ static int ADSetGeometry(DETECTOR_HDL pCamera)
     status |= PvAttrUint32Set(pCamera->PvHandle, "Width",   sizeX/binX);
     status |= PvAttrUint32Set(pCamera->PvHandle, "Height",  sizeY/binY);
     
-    if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADSetGeometry error, status=%d\n", status);
+    if (status) PRINT(pCamera->logParam, ADTraceError, 
+                      "%s:PSSetGeometry error, status=%d\n", 
+                      driverName, status);
     return(status);
 }
 
-static int ADGetGeometry(DETECTOR_HDL pCamera)
+static int PSGetGeometry(DETECTOR_HDL pCamera)
 {
     int status = AREA_DETECTOR_OK;
     tPvUint32 binX, binY, minY, minX, sizeX, sizeY;
@@ -268,7 +197,9 @@ static int ADGetGeometry(DETECTOR_HDL pCamera)
     status |= ADParam->setInteger(pCamera->params, ADImageSizeX, sizeX);
     status |= ADParam->setInteger(pCamera->params, ADImageSizeY, sizeY);
     
-    if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADGetGeometry error, status=%d\n", status);
+    if (status) PRINT(pCamera->logParam, ADTraceError, 
+                      "%s:PSGetGeometry error, status=%d\n", 
+                      driverName, status);
     return(status);
 }
 
@@ -291,7 +222,7 @@ static ADReadParameters(DETECTOR_HDL pCamera)
     /* We don't support color modes yet */
     status |= ADParam->setInteger(pCamera->params, ADDataType, intVal);
     
-    status |= ADGetGeometry(pCamera);
+    status |= PSGetGeometry(pCamera);
 
     status |= PvAttrUint32Get(pCamera->PvHandle, "AcquisitionFrameCount", &intVal);
     status |= ADParam->setInteger(pCamera->params, ADNumFrames, intVal);
@@ -324,8 +255,138 @@ static ADReadParameters(DETECTOR_HDL pCamera)
     /* Call the callbacks to update the values in higher layers */
     ADParam->callCallbacks(pCamera->params);
     
-    if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADReadParameters error, status=%d\n", status);
+    if (status) PRINT(pCamera->logParam, ADTraceError, 
+                      "%s:ADReadParameters error, status=%d\n", 
+                      driverName, status);
     return(status);
+}
+
+static void ADReport(int level)
+{
+    int i;
+    DETECTOR_HDL pCamera;
+
+    for(i=0; i<numCameras; i++) {
+        pCamera = &allCameras[i];
+        printf("Prosilica camera %d IP address=%s\n", i, pCamera->IPAddress);
+        if (level > 0) {
+            printf("  ID:                %ul\n", pCamera->PvCameraInfo.UniqueId);
+            printf("  Serial number:     %s\n",  pCamera->PvCameraInfo.SerialString);
+            printf("  Model:             %s\n",  pCamera->PvCameraInfo.DisplayName);
+            printf("  Sensor type:       %s\n",  pCamera->sensorType);
+            printf("  Sensor bits:       %d\n",  pCamera->sensorBits);
+            printf("  Sensor width:      %d\n",  pCamera->sensorWidth);
+            printf("  Sensor height:     %d\n",  pCamera->sensorHeight);
+            printf("  Frame buffer size: %d\n",  pCamera->frame[0].ImageBufferSize);
+        }
+        if (level > 5) {
+            printf("\nParameter library contents:\n");
+            ADParam->dump(pCamera->params);
+        }
+    }   
+}
+
+
+static int ADInit(void)
+{
+    return AREA_DETECTOR_OK;
+}
+
+static DETECTOR_HDL ADOpen(int card, char * param)
+{
+    DETECTOR_HDL pCamera;
+
+    if (card >= numCameras) return(NULL);
+    pCamera = &allCameras[card];
+    if (pCamera->wasFound == 0) return(NULL);
+    return pCamera;
+}
+
+static int ADClose(DETECTOR_HDL pCamera)
+{
+    return AREA_DETECTOR_OK;
+}
+
+/* Note: ADSetLog, ADFindParam, ADSetInt32Callback, ADSetFloat64Callback, 
+ * and ADSetImageDataCallback can usually be used with no modifications in new drivers. */
+ 
+static int ADSetLog( DETECTOR_HDL pCamera, ADLogFunc logFunc, void * param )
+{
+    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    if (logFunc == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
+    pCamera->logFunc=logFunc;
+    pCamera->logParam = param;
+    epicsMutexUnlock(pCamera->mutexId);
+    return AREA_DETECTOR_OK;
+}
+
+static int ADFindParam( DETECTOR_HDL pCamera, const char *paramString, int *function )
+{
+    int i;
+    int status = AREA_DETECTOR_ERROR;
+    int ncommands = sizeof(DetCommands)/sizeof(DetCommands[0]);
+
+    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    for (i=0; i < ncommands; i++) {
+        if (epicsStrCaseCmp(paramString, DetCommands[i].commandString) == 0) {
+            *function = DetCommands[i].command;
+            status = AREA_DETECTOR_OK;
+            break;
+        }
+    }
+    if (status) 
+        PRINT(pCamera->logParam, ADTraceIODriver, 
+              "%s:ADFindParam: not a valid string=%s\n", 
+              driverName, paramString);
+    else        
+        PRINT(pCamera->logParam, ADTraceIODriver, 
+              "%s:ADFindParam: found value string=%s, function=%d\n",
+              driverName, paramString, *function);
+    return status;
+}
+
+static int ADSetInt32Callback(DETECTOR_HDL pCamera, ADInt32CallbackFunc callback, void * param)
+{
+    int status = AREA_DETECTOR_OK;
+    
+    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
+    status = ADParam->setIntCallback(pCamera->params, callback, param);
+    epicsMutexUnlock(pCamera->mutexId);
+    return(status);
+}
+
+static int ADSetFloat64Callback(DETECTOR_HDL pCamera, ADFloat64CallbackFunc callback, void * param)
+{
+    int status = AREA_DETECTOR_OK;
+    
+    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
+    status = ADParam->setDoubleCallback(pCamera->params, callback, param);
+    epicsMutexUnlock(pCamera->mutexId);
+    return(status);
+}
+
+static int ADSetStringCallback(DETECTOR_HDL pCamera, ADStringCallbackFunc callback, void * param)
+{
+    int status = AREA_DETECTOR_OK;
+    
+    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
+    status = ADParam->setStringCallback(pCamera->params, callback, param);
+    epicsMutexUnlock(pCamera->mutexId);
+    return(status);
+}
+
+static int ADSetImageDataCallback(DETECTOR_HDL pCamera, ADImageDataCallbackFunc callback, void * param)
+{
+    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
+    pCamera->pImageDataCallback = callback;
+    pCamera->imageDataCallbackParam = param;
+    epicsMutexUnlock(pCamera->mutexId);
+    return AREA_DETECTOR_OK;
 }
 
 static int ADGetInteger(DETECTOR_HDL pCamera, int function, int * value)
@@ -333,12 +394,20 @@ static int ADGetInteger(DETECTOR_HDL pCamera, int function, int * value)
     int status = AREA_DETECTOR_OK;
     
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
     
     /* We just read the current value of the parameter from the parameter library.
      * Those values are updated whenever anything could cause them to change */
     status = ADParam->getInteger(pCamera->params, function, value);
-    if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADGetInteger error, status=%d function=%d, value=%d\n", 
-                      status, function, *value);
+    if (status) 
+        PRINT(pCamera->logParam, ADTraceError, 
+              "%s:ADGetInteger error, status=%d function=%d, value=%d\n", 
+              driverName, status, function, *value);
+    else        
+        PRINT(pCamera->logParam, ADTraceIODriver, 
+              "%s:ADGetInteger: function=%d, value=%d\n", 
+              driverName, function, *value);
+    epicsMutexUnlock(pCamera->mutexId);
     return(status);
 }
 
@@ -348,6 +417,7 @@ static int ADSetInteger(DETECTOR_HDL pCamera, int function, int value)
     tPvUint32 intVal = value;
 
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
 
     /* Set the parameter in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
@@ -362,7 +432,7 @@ static int ADSetInteger(DETECTOR_HDL pCamera, int function, int value)
     case ADSizeY:
         /* These commands change the chip readout geometry.  We need to cache them and apply them in the
          * correct order */
-        status |= ADSetGeometry(pCamera);
+        status |= PSSetGeometry(pCamera);
         break;
     case ADNumFrames:
         status |= PvAttrUint32Set(pCamera->PvHandle, "AcquisitionFrameCount", intVal);
@@ -414,8 +484,15 @@ static int ADSetInteger(DETECTOR_HDL pCamera, int function, int value)
     /* Read the camera parameters and do callbacks */
     status |= ADReadParameters(pCamera);
     
-    if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADSetInteger error, status=%d, function=%d, value=%d\n", 
-                      status, function, value);
+    if (status) 
+        PRINT(pCamera->logParam, ADTraceError, 
+              "%s:ADSetInteger error, status=%d function=%d, value=%d\n", 
+              driverName, status, function, value);
+    else        
+        PRINT(pCamera->logParam, ADTraceIODriver, 
+              "%s:ADSetInteger: function=%d, value=%d\n", 
+              driverName, function, value);
+    epicsMutexUnlock(pCamera->mutexId);
     return status;
 }
 
@@ -425,12 +502,19 @@ static int ADGetDouble(DETECTOR_HDL pCamera, int function, double * value)
     int status = AREA_DETECTOR_OK;
     
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-
+    epicsMutexLock(pCamera->mutexId);
     /* We just read the current value of the parameter from the parameter library.
      * Those values are updated whenever anything could cause them to change */
     status = ADParam->getDouble(pCamera->params, function, value);
-    if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADGetDouble error, status=%d, function=%d, value=%f\n", 
-                      status, function, *value);
+    if (status) 
+        PRINT(pCamera->logParam, ADTraceError, 
+              "%s:ADGetDouble error, status=%d function=%d, value=%f\n", 
+              driverName, status, function, *value);
+    else        
+        PRINT(pCamera->logParam, ADTraceIODriver, 
+              "%s:ADGetDouble: function=%d, value=%f\n", 
+              driverName, function, *value);
+    epicsMutexUnlock(pCamera->mutexId);
     return(status);
 }
 
@@ -441,6 +525,7 @@ static int ADSetDouble(DETECTOR_HDL pCamera, int function, double value)
     tPvFloat32 fltVal;
 
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
 
     /* Set the parameter in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
@@ -470,8 +555,15 @@ static int ADSetDouble(DETECTOR_HDL pCamera, int function, double value)
     /* Read the camera parameters and do callbacks */
     status |= ADReadParameters(pCamera);
     
-    if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADSetDouble error, status=%d, function=%d, value=%f\n", 
-                      status, function, value);
+    if (status) 
+        PRINT(pCamera->logParam, ADTraceError, 
+              "%s:ADSetDouble error, status=%d function=%d, value=%f\n", 
+              driverName, status, function, value);
+    else        
+        PRINT(pCamera->logParam, ADTraceIODriver, 
+              "%s:ADSetDouble: function=%d, value=%f\n", 
+              driverName, function, value);
+    epicsMutexUnlock(pCamera->mutexId);
     return status;
 }
 
@@ -480,13 +572,19 @@ static int ADGetString(DETECTOR_HDL pCamera, int function, int maxChars, char * 
     int status = AREA_DETECTOR_OK;
    
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-
+    epicsMutexLock(pCamera->mutexId);
     /* We just read the current value of the parameter from the parameter library.
      * Those values are updated whenever anything could cause them to change */
     status = ADParam->getString(pCamera->params, function, maxChars, value);
-
-    if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADGetString error, status=%d, function=%d, value=%s\n", 
-                      status, function, value);
+    if (status) 
+        PRINT(pCamera->logParam, ADTraceError, 
+              "%s:ADGetString error, status=%d function=%d, value=%s\n", 
+              driverName, status, function, value);
+    else        
+        PRINT(pCamera->logParam, ADTraceIODriver, 
+              "%s:ADGetString: function=%d, value=%s\n", 
+              driverName, function, value);
+    epicsMutexUnlock(pCamera->mutexId);
     return(status);
 }
 
@@ -495,12 +593,21 @@ static int ADSetString(DETECTOR_HDL pCamera, int function, const char *value)
     int status = AREA_DETECTOR_OK;
 
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    switch (function) {
-    default:
-        break;
-    }
-    if (status) PRINT(pCamera->logParam, TRACE_ERROR, "ADGetString error, status=%d, function=%d, value=%s\n", 
-                      status, function, value);
+    epicsMutexLock(pCamera->mutexId);
+    /* Set the parameter in the parameter library.  This may be overwritten when we read back the
+     * status at the end, but that's OK */
+    status |= ADParam->setString(pCamera->params, function, (char *)value);
+    /* Do callbacks so higher layers see any changes */
+    ADParam->callCallbacks(pCamera->params);
+    if (status) 
+        PRINT(pCamera->logParam, ADTraceError, 
+              "%s:ADSetString error, status=%d function=%d, value=%s\n", 
+              driverName, status, function, value);
+    else        
+        PRINT(pCamera->logParam, ADTraceIODriver, 
+              "%s:ASGetString: function=%d, value=%s\n", 
+              driverName, function, value);
+    epicsMutexUnlock(pCamera->mutexId);
     return status;
 }
 
@@ -508,71 +615,48 @@ static int ADGetImage(DETECTOR_HDL pCamera, int maxBytes, void *buffer)
 {
     tPvFrame *pFrame; 
     int nCopy;
+    int status = AREA_DETECTOR_OK;
     
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    if (pCamera->lastFrame == NULL) return AREA_DETECTOR_ERROR;
-    pFrame = pCamera->lastFrame;    
-    nCopy = pFrame->ImageSize;
-    if (nCopy > maxBytes) nCopy = maxBytes;
-    memcpy(buffer, pFrame->ImageBuffer, nCopy);
+    epicsMutexLock(pCamera->mutexId);
+    if (pCamera->lastFrame == NULL) {
+       status = AREA_DETECTOR_ERROR;
+    } else {
+        pFrame = pCamera->lastFrame;    
+        nCopy = pFrame->ImageSize;
+        if (nCopy > maxBytes) nCopy = maxBytes;
+        memcpy(buffer, pFrame->ImageBuffer, nCopy);
+    }
     
-    return AREA_DETECTOR_OK;
+    if (status) 
+        PRINT(pCamera->logParam, ADTraceError, 
+              "%s:ADGetImage error, status=%d maxBytes=%d, buffer=%p\n", 
+              driverName, status, maxBytes, buffer);
+    else        
+        PRINT(pCamera->logParam, ADTraceIODriver, 
+              "%s:ADGetImage error, maxBytes=%d, buffer=%p\n", 
+              driverName, maxBytes, buffer);
+    epicsMutexUnlock(pCamera->mutexId);
+    return status;
 }
 
 static int ADSetImage(DETECTOR_HDL pCamera, int maxBytes, void *buffer)
 {
-
+    int status = AREA_DETECTOR_OK;
+    
     if (pCamera == NULL) return AREA_DETECTOR_ERROR;
+    epicsMutexLock(pCamera->mutexId);
 
     /* The Prosilica does not allow downloading image data */    
-    return AREA_DETECTOR_ERROR;
+    PRINT(pCamera->logParam, ADTraceIODriver, 
+          "%s:ADSetImage not currently supported\n", driverName);
+    status = AREA_DETECTOR_ERROR;
+    epicsMutexUnlock(pCamera->mutexId);
+    return status;
 }
 
 
-
-static void PVDECL frameCallback(tPvFrame *pFrame)
-{
-    int status = AREA_DETECTOR_OK;
-    ADDataType_t dataType;
-    DETECTOR_HDL pCamera = (DETECTOR_HDL) pFrame->Context[0];
-    
-     /* Call the callback function for image data */
-    if (pCamera->pImageDataCallback) {
-        /* Convert from the PvApi data types to ADDataType */
-        switch(pFrame->Format) {
-        case ePvFmtMono8:
-        case ePvFmtBayer8:
-            dataType = ADUInt8;
-            break;
-        case ePvFmtMono16:
-        case ePvFmtBayer16:
-            dataType = ADUInt16;
-            break;
-        default:
-            /* Note, this is wrong it does not work for ePvFmtRgb48, which is 48 bits */
-            dataType = ADUInt32;
-        }
-        pCamera->pImageDataCallback(pCamera->imageDataCallbackParam, 
-                                    (void *)pFrame->ImageBuffer,
-                                    dataType, pFrame->ImageSize, pFrame->Width, pFrame->Height);
-    }
-
-    /* Set pointer that ADGetImage uses */
-    pCamera->lastFrame = pFrame;
-    
-    /* See if acquisition is done */
-    if (pCamera->framesRemaining > 0) pCamera->framesRemaining--;
-    if (pCamera->framesRemaining == 0) {
-        ADParam->setInteger(pCamera->params, ADAcquire, 0);
-        ADParam->setInteger(pCamera->params, ADStatus, ADStatusIdle);
-        ADParam->callCallbacks(pCamera->params);
-    }
-
-    /* Queue this frame to run again */
-    status = PvCaptureQueueFrame(pCamera->PvHandle, pFrame, frameCallback); 
-}
-
-static int ADLogMsg(void * param, const ADLogMask_t mask, const char *pFormat, ...)
+static int PSLogMsg(void * param, const ADLogMask_t mask, const char *pFormat, ...)
 {
 
     va_list     pvar;
@@ -625,8 +709,15 @@ int prosilicaConfig(int camera,     /* Camera number */
     pCamera = &allCameras[camera];
     pCamera->camera = camera;
     
+    /* Create the epicsMutex for locking access to data structures from other threads */
+    pCamera->mutexId = epicsMutexCreate();
+    if (!pCamera->mutexId) {
+        printf("prosilicaConfig: epicsMutexCreate failure\n");
+        return AREA_DETECTOR_ERROR;
+    }
+    
     /* Set the local log function, may be changed by higher layers */
-    ADSetLog(pCamera, NULL, NULL);
+    ADSetLog(pCamera, PSLogMsg, NULL);
 
     /* Initialize the Prosilica PvAPI library */
     status = PvInitialize();
@@ -657,10 +748,12 @@ int prosilicaConfig(int camera,     /* Camera number */
             return AREA_DETECTOR_ERROR;
         }
     }
+
     if ((pCamera->PvCameraInfo.PermittedAccess & ePvAccessMaster) == 0) {
         printf("prosilicaConfig: Cannot get control of first Prosilica camera\n");
         return AREA_DETECTOR_ERROR;
     }
+
     status = PvCameraOpen(pCamera->PvCameraInfo.UniqueId, ePvAccessMaster, &pCamera->PvHandle);
     if (status) {
         printf("prosilicaConfig: unable to open camera %d\n", camera);
@@ -673,6 +766,7 @@ int prosilicaConfig(int camera,     /* Camera number */
         printf("prosilicaConfig: unable to start capture\n");
         return AREA_DETECTOR_ERROR;
     }
+
     /* We allocate image buffers that are large enough for the biggest possible image.
        This is simpler than reallocating when readout parameters change.  It is also safer,
        since changing readout parameters happens instantly, but there will still be frames
@@ -719,11 +813,12 @@ int prosilicaConfig(int camera,     /* Camera number */
         return AREA_DETECTOR_ERROR;
     }
     
-    /* Set some parameters that need to be initialized */
-    status =  ADParam->setString(pCamera->params, ADManufacturer, "Prosilica");
-    status |= ADParam->setString(pCamera->params, ADModel, pCamera->PvCameraInfo.DisplayName);
-    status |= ADParam->setInteger(pCamera->params, ADStatus, ADStatusIdle);
-    status |= ADParam->setInteger(pCamera->params, ADAcquire, 0);
+    /* Use the utility library to set some defaults */
+    status = ADUtils->setParamDefaults(pCamera->params);
+    
+    /* Set some initial values for other parameters */
+    status =  ADParam->setString (pCamera->params, ADManufacturer, "Prosilica");
+    status |= ADParam->setString (pCamera->params, ADModel, pCamera->PvCameraInfo.DisplayName);
     status |= ADParam->setInteger(pCamera->params, ADSizeX, pCamera->sensorWidth);
     status |= ADParam->setInteger(pCamera->params, ADSizeY, pCamera->sensorHeight);
     status |= ADParam->setInteger(pCamera->params, ADMaxSizeX, pCamera->sensorWidth);
@@ -759,7 +854,7 @@ static void setupprosilicaCallFunc(const iocshArgBuf *args)
 
 
 /* prosilicaConfig */
-static const iocshArg prosilicaConfigArg0 = {"Camera being configured", iocshArgInt};
+static const iocshArg prosilicaConfigArg0 = {"Camera # being configured", iocshArgInt};
 static const iocshArg prosilicaConfigArg1 = {"IP address", iocshArgString};
 static const iocshArg * const prosilicaConfigArgs[2] = {&prosilicaConfigArg0,
                                                         &prosilicaConfigArg1};
