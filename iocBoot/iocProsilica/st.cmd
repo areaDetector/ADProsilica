@@ -5,6 +5,7 @@ dbLoadDatabase("$(AD)/dbd/prosilicaApp.dbd")
 prosilicaApp_registerRecordDeviceDriver(pdbbase) 
 dbLoadRecords("$(AD)/ADApp/Db/ADAsyn.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
 dbLoadRecords("$(AD)/ADApp/Db/ADAsynImage.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1,SIZE=8,FTVL=UCHAR,NPIXELS=1392640")
+dbLoadRecords("$(AD)/ADApp/Db/prosilica.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
 
 prosilicaSetup(1)
 prosilicaConfig(0, "164.54.160.200")
