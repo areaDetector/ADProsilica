@@ -27,11 +27,39 @@
 
 /* If we have any private driver commands they begin with ADFirstDriverCommand and should end
    with ADLastDriverCommand, which is used for setting the size of the parameter library table */
-   
 typedef enum {
-   PSTrigger1 = ADFirstDriverParam,
-   PSTrigger2,
-   ADLastDriverParam
+    /* These parameters describe the trigger modes of the Prosilica
+     * They must agree with the values in the mbbo/mbbi records in
+     * the Prosilca database. */
+    PSTriggerStartFreeRun,
+    PSTriggerStartSyncIn1,
+    PSTriggerStartSyncIn2,
+    PSTriggerStartSyncIn3,
+    PSTriggerStartSyncIn4,
+    PSTriggerStartFixedRate,
+    PSTriggerStartSoftware
+} PSTriggerStartMode_t;
+
+static char *PSTriggerStartStrings[] = {
+    "Freerun","SyncIn1","SyncIn2","SyncIn3","SyncIn4","FixedRate","Software"
+};
+ 
+#define NUM_START_TRIGGER_MODES (sizeof(PSTriggerStartStrings) / sizeof(PSTriggerStartStrings[0]))
+
+typedef enum {
+    /* These parameters are for the camera statistics */
+    PSReadStatistics = ADFirstDriverParam,
+    PSStatDriverType,
+    PSStatFilterVersion,
+    PSStatFrameRate,
+    PSStatFramesCompleted,
+    PSStatFramesDropped,
+    PSStatPacketsErroneous,
+    PSStatPacketsMissed,
+    PSStatPacketsReceived,
+    PSStatPacketsRequested,
+    PSStatPacketsResent,
+    ADLastDriverParam
 } DetParam_t;
 
 /* This structure and array are used for conveniently looking up commands in ADFindParam() */
@@ -41,8 +69,17 @@ typedef struct {
 } DetCommandStruct;
 
 static DetCommandStruct DetCommands[] = {
-    {PSTrigger1,   "TRIGGER1"},  
-    {PSTrigger2,   "TRIGGER1"}  
+    {PSReadStatistics,        "PS_READ_STATISTICS"},
+    {PSStatDriverType,        "PS_DRIVER_TYPE"},
+    {PSStatFilterVersion,     "PS_FILTER_VERSION"},
+    {PSStatFrameRate,         "PS_FRAME_RATE"},
+    {PSStatFramesCompleted,   "PS_FRAMES_COMPLETED"},
+    {PSStatFramesDropped,     "PS_FRAMES_DROPPED"},
+    {PSStatPacketsErroneous,  "PS_PACKETS_ERRONEOUS"},
+    {PSStatPacketsMissed,     "PS_PACKETS_MISSED"},
+    {PSStatPacketsReceived,   "PS_PACKETS_RECEIVED"},
+    {PSStatPacketsRequested,  "PS_PACKETS_REQUESTED"},
+    {PSStatPacketsResent,     "PS_PACKETS_RESENT"}
 };
 
 static char *driverName = "drvProsilica";
@@ -203,7 +240,41 @@ static int PSGetGeometry(DETECTOR_HDL pCamera)
     return(status);
 }
 
-static ADReadParameters(DETECTOR_HDL pCamera)
+static PSReadStats(DETECTOR_HDL pCamera)
+{
+    int status = AREA_DETECTOR_OK;
+    char buffer[50];
+    int nchars;
+    epicsUInt32 uval;
+    float fval;
+    
+    status |= PvAttrEnumGet      (pCamera->PvHandle, "StatDriverType", buffer, sizeof(buffer), &nchars);
+    status |= ADParam->setString (pCamera->params,  PSStatDriverType, buffer);
+    status |= PvAttrStringGet    (pCamera->PvHandle, "StatFilterVersion", buffer, sizeof(buffer), &nchars);
+    status |= ADParam->setString (pCamera->params,  PSStatFilterVersion, buffer);
+    status |= PvAttrFloat32Get   (pCamera->PvHandle, "StatFrameRate", &fval);
+    status |= ADParam->setDouble (pCamera->params,  PSStatFrameRate, fval);
+    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatFramesCompleted", &uval);
+    status |= ADParam->setInteger(pCamera->params,  PSStatFramesCompleted, (int)uval);
+    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatFramesDropped", &uval);
+    status |= ADParam->setInteger(pCamera->params,  PSStatFramesDropped, (int)uval);
+    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsErroneous", &uval);
+    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsErroneous, (int)uval);
+    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsMissed", &uval);
+    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsMissed, (int)uval);
+    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsReceived", &uval);
+    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsReceived, (int)uval);
+    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsRequested", &uval);
+    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsRequested, (int)uval);
+    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsResent", &uval);
+    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsResent, (int)uval);
+    if (status) PRINT(pCamera->logParam, ADTraceError, 
+                      "%s:PSReadStatistics error, status=%d\n", 
+                      driverName, status);
+    return(status);
+}
+
+static PSReadParameters(DETECTOR_HDL pCamera)
 {
     int status = AREA_DETECTOR_OK;
     tPvUint32 intVal;
@@ -228,10 +299,10 @@ static ADReadParameters(DETECTOR_HDL pCamera)
     status |= ADParam->setInteger(pCamera->params, ADNumFrames, intVal);
 
     status |= PvAttrEnumGet(pCamera->PvHandle, "AcquisitionMode", buffer, sizeof(buffer), &nchars);
-    if      (!strcmp(buffer, "SingleFrame")) intVal = ADSingleFrame;
-    else if (!strcmp(buffer, "MultiFrame"))  intVal = ADMultipleFrame;
-    else if (!strcmp(buffer, "Recorder"))    intVal = ADMultipleFrame;
-    else if (!strcmp(buffer, "Continuous"))  intVal = ADContinuousFrame;
+    if      (!strcmp(buffer, "SingleFrame")) intVal = ADFrameSingle;
+    else if (!strcmp(buffer, "MultiFrame"))  intVal = ADFrameMultiple;
+    else if (!strcmp(buffer, "Recorder"))    intVal = ADFrameMultiple;
+    else if (!strcmp(buffer, "Continuous"))  intVal = ADFrameContinuous;
     status |= ADParam->setInteger(pCamera->params, ADFrameMode, intVal);
 
     /* Prosilica does not support more than 1 exposure per frame */
@@ -256,7 +327,7 @@ static ADReadParameters(DETECTOR_HDL pCamera)
     ADParam->callCallbacks(pCamera->params);
     
     if (status) PRINT(pCamera->logParam, ADTraceError, 
-                      "%s:ADReadParameters error, status=%d\n", 
+                      "%s:PSReadParameters error, status=%d\n", 
                       driverName, status);
     return(status);
 }
@@ -439,13 +510,13 @@ static int ADSetInteger(DETECTOR_HDL pCamera, int function, int value)
         break;
     case ADFrameMode:
         switch(value) {
-        case ADSingleFrame:
+        case ADFrameSingle:
             status |= PvAttrEnumSet(pCamera->PvHandle, "AcquisitionMode", "SingleFrame");
             break;
-        case ADMultipleFrame:
+        case ADFrameMultiple:
             status |= PvAttrEnumSet(pCamera->PvHandle, "AcquisitionMode", "MultiFrame");
             break;
-        case ADContinuousFrame:
+        case ADFrameContinuous:
             status |= PvAttrEnumSet(pCamera->PvHandle, "AcquisitionMode", "Continuous");
             break;
         }
@@ -460,13 +531,13 @@ static int ADSetInteger(DETECTOR_HDL pCamera, int function, int value)
             status |= ADParam->getInteger(pCamera->params, ADFrameMode, &frameMode);
             status |= ADParam->getInteger(pCamera->params, ADNumFrames, &numFrames);
             switch(frameMode) {
-            case ADSingleFrame:
+            case ADFrameSingle:
                 pCamera->framesRemaining = 1;
                 break;
-            case ADMultipleFrame:
+            case ADFrameMultiple:
                 pCamera->framesRemaining = numFrames;
                 break;
-            case ADContinuousFrame:
+            case ADFrameContinuous:
                 pCamera->framesRemaining = -1;
                 break;
             }
@@ -477,12 +548,21 @@ static int ADSetInteger(DETECTOR_HDL pCamera, int function, int value)
             status |= PvCommandRun(pCamera->PvHandle, "AcquisitionAbort");
         }
         break;
-    default:
+    case ADTriggerMode:
+        if ((value < 0) || (value > (NUM_START_TRIGGER_MODES-1))) {
+            status = AREA_DETECTOR_ERROR;
+            break;
+        }
+        status |= PvAttrEnumSet(pCamera->PvHandle, "FrameStartTriggerMode", 
+                                PSTriggerStartStrings[value]);
+        break;
+    case PSReadStatistics:
+        PSReadStats(pCamera);
         break;
     }
     
     /* Read the camera parameters and do callbacks */
-    status |= ADReadParameters(pCamera);
+    status |= PSReadParameters(pCamera);
     
     if (status) 
         PRINT(pCamera->logParam, ADTraceError, 
@@ -553,7 +633,7 @@ static int ADSetDouble(DETECTOR_HDL pCamera, int function, double value)
     }
 
     /* Read the camera parameters and do callbacks */
-    status |= ADReadParameters(pCamera);
+    status |= PSReadParameters(pCamera);
     
     if (status) 
         PRINT(pCamera->logParam, ADTraceError, 
@@ -829,12 +909,19 @@ int prosilicaConfig(int camera,     /* Camera number */
     }
     
      /* Read the current camera settings */
-    status = ADReadParameters(pCamera);
+    status = PSReadParameters(pCamera);
     if (status) {
         printf("prosilicaConfig: unable to read camera settings\n");
         return AREA_DETECTOR_ERROR;
     }
 
+    /* Read the current camera statistics */
+    status = PSReadStats(pCamera);
+    if (status) {
+        printf("prosilicaConfig: unable to read camera statistics\n");
+        return AREA_DETECTOR_ERROR;
+    }
+        
     /* We found the camera and everything is OK.  Set the flag. */
     pCamera->wasFound = 1;
     
