@@ -10,7 +10,7 @@ include $(TOP)/configure/CONFIG
 LIBRARY_IOC_WIN32 += prosilica
 LIBRARY_IOC_cygwin32 += prosilica
 LIB_SRCS += drvProsilica.c
-LIB_LIBS += PvAPI
+LIB_LIBS += PvAPI ImageLib
 LIB_LIBS += ccd
 LIB_LIBS += sscan autosave
 LIB_LIBS += asyn
@@ -20,8 +20,8 @@ LIB_LIBS += $(EPICS_BASE_IOC_LIBS)
 # to this directory after building with Visual Basic .NET 2003.
 BIN_INSTALLS_WIN32    += ../PvAPI.dll
 BIN_INSTALLS_cygwin32 += ../PvAPI.dll
-LIB_INSTALLS_WIN32    += ../PvAPI.lib
-LIB_INSTALLS_cygwin32 += ../PvAPI.lib
+LIB_INSTALLS_WIN32    += ../PvAPI.lib ../ImageLib.lib
+LIB_INSTALLS_cygwin32 += ../PvAPI.lib ../ImageLib.lib
 
 #==================================
 PROD_IOC_WIN32 += prosilicaApp
@@ -36,7 +36,7 @@ prosilicaApp_SRCS_vxWorks += prosilicaApp_registerRecordDeviceDriver.cpp
 
 # Add locally compiled object code
 prosilicaApp_LIBS += prosilica
-prosilicaApp_LIBS += PvAPI
+prosilicaApp_LIBS += PvAPI ImageLib
 prosilicaApp_LIBS += areaDetector
 prosilicaApp_LIBS += sscan autosave 
 prosilicaApp_LIBS += asyn
