@@ -144,10 +144,46 @@ static int numCameras;
 static camera_t *allCameras=NULL;
 
 
+static int PSWriteFile(DETECTOR_HDL pCamera)
+{
+    /* Writes last frame to disk as a TIFF file. */
+    int status = AREA_DETECTOR_OK, tiffStatus;
+    char fullFileName[MAX_FILENAME_LEN];
+    int fileFormat;
+    int oldSize, actualSize;
+    tPvFrame *pFrame = pCamera->lastFrame;
+
+    if (pFrame == NULL) return AREA_DETECTOR_ERROR;
+
+    status |= ADUtils->createFileName(pCamera->params, MAX_FILENAME_LEN, fullFileName);
+    if (status) { 
+        PRINT(pCamera->logParam, ADTraceError, 
+              "%s:PSWriteFile error creating full file name, fullFileName=%s, status=%d\n", 
+              driverName, fullFileName, status);
+        return(status);
+    }
+    
+    /* There is a bug in ImageWriteTiff, it crashes if the ImageBufferSize is not the actual image size.
+     * Temporarily replace the actual buffer size with the size of the current frame. */
+    status |= PvAttrUint32Get(pCamera->PvHandle, "TotalBytesPerFrame", &actualSize);
+    oldSize = pFrame->ImageBufferSize;
+    pFrame->ImageBufferSize = actualSize;
+    
+    status |= ADParam->getInteger(pCamera->params, ADFileFormat, &fileFormat);
+    /* We only support writing in TIFF format for now */
+    tiffStatus = ImageWriteTiff(fullFileName, pFrame);
+    /* Restore size */
+    pFrame->ImageBufferSize = oldSize;
+    if (tiffStatus != 1) status |= AREA_DETECTOR_ERROR;
+    status |= ADParam->setString(pCamera->params, ADFullFileName, fullFileName);
+    return(status);
+}
+
 static void PVDECL PSFrameCallback(tPvFrame *pFrame)
 {
     int status = AREA_DETECTOR_OK;
     ADDataType_t dataType;
+    int autoSave;
     DETECTOR_HDL pCamera = (DETECTOR_HDL) pFrame->Context[0];
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
@@ -187,9 +223,15 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
     if (pCamera->framesRemaining == 0) {
         ADParam->setInteger(pCamera->params, ADAcquire, 0);
         ADParam->setInteger(pCamera->params, ADStatus, ADStatusIdle);
-        ADParam->callCallbacks(pCamera->params);
-    }
+     }
+    
+    /* If autoSave is set then save the image */
+    status = ADParam->getInteger(pCamera->params, ADAutoSave, &autoSave);
+    if (autoSave) status = PSWriteFile(pCamera);
 
+    /* Update any changed parameters */
+    ADParam->callCallbacks(pCamera->params);
+    
     /* Queue this frame to run again */
     status = PvCaptureQueueFrame(pCamera->PvHandle, pFrame, PSFrameCallback); 
     epicsMutexUnlock(pCamera->mutexId);
@@ -348,44 +390,6 @@ static PSReadParameters(DETECTOR_HDL pCamera)
     if (status) PRINT(pCamera->logParam, ADTraceError, 
                       "%s:PSReadParameters error, status=%d\n", 
                       driverName, status);
-    return(status);
-}
-
-static int PSWriteFile(DETECTOR_HDL pCamera)
-{
-    /* Writes last frame to disk as a TIFF file. */
-    int status = AREA_DETECTOR_OK;
-    char fullFileName[MAX_FILENAME_LEN];
-    int fileFormat;
-    tPvFrame *pFrame = pCamera->lastFrame;
-
-    if (pFrame == NULL) return AREA_DETECTOR_ERROR;
-
-    status |= ADUtils->createFileName(pCamera->params, MAX_FILENAME_LEN, fullFileName);
-    if (status) { 
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:PSWriteFile error creating full file name, fullFileName=%s, status=%d\n", 
-              driverName, fullFileName, status);
-        return(status);
-    }
-    status |= ADParam->getInteger(pCamera->params, ADFileFormat, &fileFormat);
-    
-    /* We only support writing in TIFF format for now */
-printf("PSWriteFile, fullFileName=%s\n", fullFileName);
-printf("PSWriteFile, frame information\n");
-printf("   ImageBuffer=0x%p\n", pFrame->ImageBuffer);
-printf("   ImageBuffer[100]=%d\n", ((unsigned char *)pFrame->ImageBuffer)[100]);
-printf("   ImageBufferSize=%d\n", pFrame->ImageBufferSize);
-printf("   AncillaryBuffer=0x%p\n", pFrame->AncillaryBuffer);
-printf("   AncillaryBufferSize=%d\n", pFrame->AncillaryBufferSize);
-printf("   Status=%d\n", pFrame->Status);
-printf("   Width=%d\n", pFrame->Width);
-printf("   Height=%d\n", pFrame->Height);
-printf("   Format=%d\n", pFrame->Format);
-printf("   BitDepth=%d\n", pFrame->BitDepth);
-printf("PSWriteFile, calling ImageWriteTiff\n");
-    status = ImageWriteTiff(fullFileName, pFrame);
-printf("PSWriteFile, after calling ImageWriteTiff, status=%d\n", status);
     return(status);
 }
 
@@ -773,7 +777,25 @@ static int ADSetInteger(DETECTOR_HDL pCamera, int function, int value)
         break;
     case ADWriteFile:
         status = PSWriteFile(pCamera);
-        break; 
+        break;
+    case ADDataType:
+        switch (value) {
+            case ADInt8:
+            case ADUInt8:
+                status |= PvAttrEnumSet(pCamera->PvHandle, "PixelFormat", "Mono8");
+                break;
+            case ADInt16:
+            case ADUInt16:
+                status |= PvAttrEnumSet(pCamera->PvHandle, "PixelFormat", "Mono16");
+                break;
+            /* We don't support other formats yet */
+            default:
+                PRINT(pCamera->logParam, ADTraceError, 
+                    "%s:ADSetInteger error unsupported data type %d\n", 
+                    driverName, value);
+                status |= AREA_DETECTOR_ERROR;
+                break;
+        }      
     }
     
     /* Read the camera parameters and do callbacks */
