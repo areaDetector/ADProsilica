@@ -10,6 +10,7 @@ include $(TOP)/configure/CONFIG
 LIBRARY_IOC_WIN32 += prosilica
 LIBRARY_IOC_cygwin32 += prosilica
 LIB_SRCS += drvProsilica.c
+LIB_SRCS += drvProsilicaEpics.c
 LIB_LIBS += PvAPI ImageLib
 LIB_LIBS += ccd
 LIB_LIBS += sscan autosave
