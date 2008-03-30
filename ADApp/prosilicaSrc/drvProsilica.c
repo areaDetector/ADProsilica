@@ -1,3 +1,14 @@
+/* drvProsilica.c
+ *
+ * This is a driver for Prosilica cameras (GigE and CameraLink).
+ *
+ * Author: Mark Rivers
+ *         University of Chicago
+ *
+ * Created:  March 20, 2008
+ *
+ */
+ 
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -5,18 +16,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <epicsFindSymbol.h>
 #include <epicsTime.h>
 #include <epicsThread.h>
 #include <epicsEvent.h>
 #include <epicsString.h>
 #include <epicsStdio.h>
 #include <epicsMutex.h>
-#include <ellLib.h>
-#include <iocsh.h>
 #include <osiSock.h>  /* Needed for translating IP address to name */
-#include <drvSup.h>
-#include <epicsExport.h>
 
 #define DEFINE_AREA_DETECTOR_PROTOTYPES 1
 #include "ADParamLib.h"
@@ -109,8 +115,6 @@ ADDrvSet_t ADProsilica =
   };
 
 #define MAX_FRAMES  2  /* Number of frame buffers for PvApi */
-
-epicsExportAddress(drvet, ADProsilica);
 
 typedef struct ADHandle {
     /* The first set of items in this structure will be needed by all drivers */
@@ -1059,37 +1063,4 @@ int prosilicaConfig(int camera,     /* Camera number */
     
     return AREA_DETECTOR_OK;
 }
-
-/* Code for iocsh registration */
-
-/* prosilicaSetup */
-static const iocshArg prosilicaSetupArg0 = {"Number of Prosilica cameras", iocshArgInt};
-static const iocshArg * const prosilicaSetupArgs[1] =  {&prosilicaSetupArg0};
-static const iocshFuncDef setupprosilica = {"prosilicaSetup", 1, prosilicaSetupArgs};
-static void setupprosilicaCallFunc(const iocshArgBuf *args)
-{
-    prosilicaSetup(args[0].ival);
-}
-
-
-/* prosilicaConfig */
-static const iocshArg prosilicaConfigArg0 = {"Camera # being configured", iocshArgInt};
-static const iocshArg prosilicaConfigArg1 = {"IP address", iocshArgString};
-static const iocshArg * const prosilicaConfigArgs[2] = {&prosilicaConfigArg0,
-                                                        &prosilicaConfigArg1};
-static const iocshFuncDef configprosilica = {"prosilicaConfig", 2, prosilicaConfigArgs};
-static void configprosilicaCallFunc(const iocshArgBuf *args)
-{
-    prosilicaConfig(args[0].ival, args[1].sval);
-}
-
-
-static void prosilicaRegister(void)
-{
-
-    iocshRegister(&setupprosilica,      setupprosilicaCallFunc);
-    iocshRegister(&configprosilica,     configprosilicaCallFunc);
-}
-
-epicsExportRegistrar(prosilicaRegister);
 
