@@ -11,6 +11,7 @@ LIBRARY_IOC_WIN32 += prosilica
 LIBRARY_IOC_cygwin32 += prosilica
 LIB_SRCS += drvProsilica.c
 LIB_SRCS += drvProsilicaEpics.c
+LIB_LIBS += ADBase ADPlugin
 LIB_LIBS += PvAPI ImageLib
 LIB_LIBS += ccd
 LIB_LIBS += sscan autosave
@@ -38,7 +39,7 @@ prosilicaApp_SRCS_vxWorks += prosilicaApp_registerRecordDeviceDriver.cpp
 # Add locally compiled object code
 prosilicaApp_LIBS += prosilica
 prosilicaApp_LIBS += PvAPI ImageLib
-prosilicaApp_LIBS += areaDetector
+prosilicaApp_LIBS += ADBase ADPlugin
 prosilicaApp_LIBS += sscan autosave 
 prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
