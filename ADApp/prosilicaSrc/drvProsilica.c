@@ -22,113 +22,39 @@
 #include <epicsString.h>
 #include <epicsStdio.h>
 #include <epicsMutex.h>
-#include <osiSock.h>  /* Needed for translating IP address to name */
+#include <cantProceed.h>
 
-#define DEFINE_AREA_DETECTOR_PROTOTYPES 1
-#include "ADParamLib.h"
-#include "ADInterface.h"
-#include "ADUtils.h"
-#include "drvProsilica.h"
+#include <asynStandardInterfaces.h>
+
 #include "PvAPI.h"
 #include "ImageLib.h"
 
-/* If we have any private driver commands they begin with ADFirstDriverCommand and should end
-   with ADLastDriverCommand, which is used for setting the size of the parameter library table */
-typedef enum {
-    /* These parameters describe the trigger modes of the Prosilica
-     * They must agree with the values in the mbbo/mbbi records in
-     * the Prosilca database. */
-    PSTriggerStartFreeRun,
-    PSTriggerStartSyncIn1,
-    PSTriggerStartSyncIn2,
-    PSTriggerStartSyncIn3,
-    PSTriggerStartSyncIn4,
-    PSTriggerStartFixedRate,
-    PSTriggerStartSoftware
-} PSTriggerStartMode_t;
-
-static char *PSTriggerStartStrings[] = {
-    "Freerun","SyncIn1","SyncIn2","SyncIn3","SyncIn4","FixedRate","Software"
-};
- 
-#define NUM_START_TRIGGER_MODES (sizeof(PSTriggerStartStrings) / sizeof(PSTriggerStartStrings[0]))
-
-typedef enum {
-    /* These parameters are for the camera statistics */
-    PSReadStatistics = ADFirstDriverParam,
-    PSStatDriverType,
-    PSStatFilterVersion,
-    PSStatFrameRate,
-    PSStatFramesCompleted,
-    PSStatFramesDropped,
-    PSStatPacketsErroneous,
-    PSStatPacketsMissed,
-    PSStatPacketsReceived,
-    PSStatPacketsRequested,
-    PSStatPacketsResent,
-    ADLastDriverParam
-} DetParam_t;
-
-/* This structure and array are used for conveniently looking up commands in ADFindParam() */
-typedef struct {
-    DetParam_t command;
-    char *commandString;
-} DetCommandStruct;
-
-static DetCommandStruct DetCommands[] = {
-    {PSReadStatistics,        "PS_READ_STATISTICS"},
-    {PSStatDriverType,        "PS_DRIVER_TYPE"},
-    {PSStatFilterVersion,     "PS_FILTER_VERSION"},
-    {PSStatFrameRate,         "PS_FRAME_RATE"},
-    {PSStatFramesCompleted,   "PS_FRAMES_COMPLETED"},
-    {PSStatFramesDropped,     "PS_FRAMES_DROPPED"},
-    {PSStatPacketsErroneous,  "PS_PACKETS_ERRONEOUS"},
-    {PSStatPacketsMissed,     "PS_PACKETS_MISSED"},
-    {PSStatPacketsReceived,   "PS_PACKETS_RECEIVED"},
-    {PSStatPacketsRequested,  "PS_PACKETS_REQUESTED"},
-    {PSStatPacketsResent,     "PS_PACKETS_RESENT"}
-};
+/* Defining this will create the static table of standard parameters in ADInterface.h */
+#define DEFINE_STANDARD_PARAM_STRINGS 1
+#include "ADParamLib.h"
+#include "ADInterface.h"
+#include "ADUtils.h"
+#include "asynADImage.h"
+#include "drvProsilica.h"
 
 static char *driverName = "drvProsilica";
-
-ADDrvSet_t ADProsilica = 
-  {
-    18,
-    ADReport,            /* Standard EPICS driver report function (optional) */
-    ADInit,              /* Standard EPICS driver initialisation function (optional) */
-    ADSetLog,            /* Defines an external logging function (optional) */
-    ADOpen,              /* Driver open function */
-    ADClose,             /* Driver close function */
-    ADFindParam,         /* Parameter lookup function */
-    ADSetInt32Callback,     /* Provides a callback function the driver can call when an int32 value updates */
-    ADSetFloat64Callback,   /* Provides a callback function the driver can call when a float64 value updates */
-    ADSetStringCallback,    /* Provides a callback function the driver can call when a float64 value updates */
-    ADSetImageDataCallback, /* Provides a callback function the driver can call when the image data updates */
-    ADGetInteger,        /* Pointer to function to get an integer value */
-    ADSetInteger,        /* Pointer to function to set an integer value */
-    ADGetDouble,         /* Pointer to function to get a double value */
-    ADSetDouble,         /* Pointer to function to set a double value */
-    ADGetString,         /* Pointer to function to get a string value */
-    ADSetString,         /* Pointer to function to set a string value */
-    ADGetImage,          /* Pointer to function to read image data */
-    ADSetImage           /* Pointer to function to write image data */
-  };
 
 #define MAX_FRAMES  2  /* Number of frame buffers for PvApi */
 
 typedef struct ADHandle {
     /* The first set of items in this structure will be needed by all drivers */
-    int camera;                        /* Index of this camera in list of controlled cameras */
-    epicsMutexId mutexId;              /* A Mutex to lock access to data structures. */
-    ADLogFunc logFunc;                 /* These are for error and debug logging.*/
-    void *logParam;
+    char *portName;
+    epicsMutexId mutexId;              /* A mutex to lock access to data structures. */
     PARAMS params;
-    ADImageDataCallbackFunc pImageDataCallback;
-    void *imageDataCallbackParam;
+    /* asyn interfaces */
+    asynStandardInterfaces asynInterfaces;
+    asynInterface asynADImage;
+    void *ADImageInterruptPvt;
+    asynUser *pasynUser;
 
     /* These items are specific to the Prosilica API */
     tPvHandle PvHandle;                /* Handle for the Prosilica PvAPI library */
-    char *ipAddr;
+    int uniqueId;
     tPvCameraInfo PvCameraInfo;
     tPvFrame frame[MAX_FRAMES];        /* Frame buffers. */
     tPvFrame *lastFrame;
@@ -138,30 +64,23 @@ typedef struct ADHandle {
     int sensorBits;
     int sensorWidth;
     int sensorHeight;
-} camera_t;
-
-#define PRINT   (pCamera->logFunc)
-
-static int numCameras;
-
-/* Pointer to array of controller strutures */
-static camera_t *allCameras=NULL;
+} drvADPvt;
 
 
-static int PSWriteFile(DETECTOR_HDL pCamera)
+static int PSWriteFile(drvADPvt *pPvt)
 {
     /* Writes last frame to disk as a TIFF file. */
-    int status = AREA_DETECTOR_OK, tiffStatus;
+    int status = asynSuccess, tiffStatus;
     char fullFileName[MAX_FILENAME_LEN];
     int fileFormat;
     int oldSize, actualSize;
-    tPvFrame *pFrame = pCamera->lastFrame;
+    tPvFrame *pFrame = pPvt->lastFrame;
 
-    if (pFrame == NULL) return AREA_DETECTOR_ERROR;
+    if (pFrame == NULL) return asynError;
 
-    status |= ADUtils->createFileName(pCamera->params, MAX_FILENAME_LEN, fullFileName);
+    status |= ADUtils->createFileName(pPvt->params, MAX_FILENAME_LEN, fullFileName);
     if (status) { 
-        PRINT(pCamera->logParam, ADTraceError, 
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
               "%s:PSWriteFile error creating full file name, fullFileName=%s, status=%d\n", 
               driverName, fullFileName, status);
         return(status);
@@ -169,26 +88,26 @@ static int PSWriteFile(DETECTOR_HDL pCamera)
     
     /* There is a bug in ImageWriteTiff, it crashes if the ImageBufferSize is not the actual image size.
      * Temporarily replace the actual buffer size with the size of the current frame. */
-    status |= PvAttrUint32Get(pCamera->PvHandle, "TotalBytesPerFrame", &actualSize);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "TotalBytesPerFrame", &actualSize);
     oldSize = pFrame->ImageBufferSize;
     pFrame->ImageBufferSize = actualSize;
     
-    status |= ADParam->getInteger(pCamera->params, ADFileFormat, &fileFormat);
+    status |= ADParam->getInteger(pPvt->params, ADFileFormat, &fileFormat);
     /* We only support writing in TIFF format for now */
     tiffStatus = ImageWriteTiff(fullFileName, pFrame);
     /* Restore size */
     pFrame->ImageBufferSize = oldSize;
-    if (tiffStatus != 1) status |= AREA_DETECTOR_ERROR;
-    status |= ADParam->setString(pCamera->params, ADFullFileName, fullFileName);
+    if (tiffStatus != 1) status |= asynError;
+    status |= ADParam->setString(pPvt->params, ADFullFileName, fullFileName);
     return(status);
 }
 
 static void PVDECL PSFrameCallback(tPvFrame *pFrame)
 {
-    int status = AREA_DETECTOR_OK;
+    int status = asynSuccess;
     ADDataType_t dataType;
     int autoSave;
-    DETECTOR_HDL pCamera = (DETECTOR_HDL) pFrame->Context[0];
+    drvADPvt *pPvt = (drvADPvt *) pFrame->Context[0];
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
      * we will not be able to take the mutex and things will hang.  Prevent this by looking at the frame
@@ -196,12 +115,11 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
      * that case */
     if (pFrame->Status == ePvErrCancelled) return;
 
-    epicsMutexLock(pCamera->mutexId);
+    epicsMutexLock(pPvt->mutexId);
     
-     /* Call the callback function for image data */
-    if (pCamera->pImageDataCallback) {
-        /* Convert from the PvApi data types to ADDataType */
-        switch(pFrame->Format) {
+    /* Call the callback function for image data */
+    /* Convert from the PvApi data types to ADDataType */
+    switch(pFrame->Format) {
         case ePvFmtMono8:
         case ePvFmtBayer8:
             dataType = ADUInt8;
@@ -213,259 +131,248 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
         default:
             /* Note, this is wrong it does not work for ePvFmtRgb48, which is 48 bits */
             dataType = ADUInt32;
-        }
-        pCamera->pImageDataCallback(pCamera->imageDataCallbackParam, 
-                                    (void *)pFrame->ImageBuffer,
-                                    dataType, pFrame->Width, pFrame->Height);
+            break;
     }
+    ADUtils->ADImageCallback(pPvt->params, pPvt->ADImageInterruptPvt, 
+                             (void *)pFrame->ImageBuffer,
+                             dataType, pFrame->Width, pFrame->Height);
 
     /* Set pointer that ADGetImage uses */
-    pCamera->lastFrame = pFrame;
+    pPvt->lastFrame = pFrame;
     
     /* See if acquisition is done */
-    if (pCamera->framesRemaining > 0) pCamera->framesRemaining--;
-    if (pCamera->framesRemaining == 0) {
-        ADParam->setInteger(pCamera->params, ADAcquire, 0);
-        ADParam->setInteger(pCamera->params, ADStatus, ADStatusIdle);
+    if (pPvt->framesRemaining > 0) pPvt->framesRemaining--;
+    if (pPvt->framesRemaining == 0) {
+        ADParam->setInteger(pPvt->params, ADAcquire, 0);
+        ADParam->setInteger(pPvt->params, ADStatus, ADStatusIdle);
      }
     
     /* If autoSave is set then save the image */
-    status = ADParam->getInteger(pCamera->params, ADAutoSave, &autoSave);
-    if (autoSave) status = PSWriteFile(pCamera);
+    status = ADParam->getInteger(pPvt->params, ADAutoSave, &autoSave);
+    if (autoSave) status = PSWriteFile(pPvt);
 
     /* Update any changed parameters */
-    ADParam->callCallbacks(pCamera->params);
+    ADParam->callCallbacks(pPvt->params);
     
     /* Queue this frame to run again */
-    status = PvCaptureQueueFrame(pCamera->PvHandle, pFrame, PSFrameCallback); 
-    epicsMutexUnlock(pCamera->mutexId);
+    status = PvCaptureQueueFrame(pPvt->PvHandle, pFrame, PSFrameCallback); 
+    epicsMutexUnlock(pPvt->mutexId);
 }
 
-static int PSSetGeometry(DETECTOR_HDL pCamera)
+static int PSSetGeometry(drvADPvt *pPvt)
 {
-    int status = AREA_DETECTOR_OK;
+    int status = asynSuccess;
     tPvUint32 binX, binY, minY, minX, sizeX, sizeY;
     
     /* Get all of the current geometry parameters from the parameter library */
-    status |= ADParam->getInteger(pCamera->params, ADBinX, &binX);
-    status |= ADParam->getInteger(pCamera->params, ADBinY, &binY);
-    status |= ADParam->getInteger(pCamera->params, ADMinX, &minX);
-    status |= ADParam->getInteger(pCamera->params, ADMinY, &minY);
-    status |= ADParam->getInteger(pCamera->params, ADSizeX, &sizeX);
-    status |= ADParam->getInteger(pCamera->params, ADSizeY, &sizeY);
+    status |= ADParam->getInteger(pPvt->params, ADBinX, &binX);
+    status |= ADParam->getInteger(pPvt->params, ADBinY, &binY);
+    status |= ADParam->getInteger(pPvt->params, ADMinX, &minX);
+    status |= ADParam->getInteger(pPvt->params, ADMinY, &minY);
+    status |= ADParam->getInteger(pPvt->params, ADSizeX, &sizeX);
+    status |= ADParam->getInteger(pPvt->params, ADSizeY, &sizeY);
     
-    status |= PvAttrUint32Set(pCamera->PvHandle, "BinningX", binX);
-    status |= PvAttrUint32Set(pCamera->PvHandle, "BinningY", binY);
-    status |= PvAttrUint32Set(pCamera->PvHandle, "RegionX", minX/binX);
-    status |= PvAttrUint32Set(pCamera->PvHandle, "RegionY", minY/binY);
-    status |= PvAttrUint32Set(pCamera->PvHandle, "Width",   sizeX/binX);
-    status |= PvAttrUint32Set(pCamera->PvHandle, "Height",  sizeY/binY);
+    status |= PvAttrUint32Set(pPvt->PvHandle, "BinningX", binX);
+    status |= PvAttrUint32Set(pPvt->PvHandle, "BinningY", binY);
+    status |= PvAttrUint32Set(pPvt->PvHandle, "RegionX", minX/binX);
+    status |= PvAttrUint32Set(pPvt->PvHandle, "RegionY", minY/binY);
+    status |= PvAttrUint32Set(pPvt->PvHandle, "Width",   sizeX/binX);
+    status |= PvAttrUint32Set(pPvt->PvHandle, "Height",  sizeY/binY);
     
-    if (status) PRINT(pCamera->logParam, ADTraceError, 
+    if (status) asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
                       "%s:PSSetGeometry error, status=%d\n", 
                       driverName, status);
     return(status);
 }
 
-static int PSGetGeometry(DETECTOR_HDL pCamera)
+static int PSGetGeometry(drvADPvt *pPvt)
 {
-    int status = AREA_DETECTOR_OK;
+    int status = asynSuccess;
     tPvUint32 binX, binY, minY, minX, sizeX, sizeY;
 
-    status |= PvAttrUint32Get(pCamera->PvHandle, "BinningX", &binX);
-    status |= PvAttrUint32Get(pCamera->PvHandle, "BinningY", &binY);
-    status |= PvAttrUint32Get(pCamera->PvHandle, "RegionX",  &minX);
-    status |= PvAttrUint32Get(pCamera->PvHandle, "RegionY",  &minY);
-    status |= PvAttrUint32Get(pCamera->PvHandle, "Width",    &sizeX);
-    status |= PvAttrUint32Get(pCamera->PvHandle, "Height",   &sizeY);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "BinningX", &binX);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "BinningY", &binY);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "RegionX",  &minX);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "RegionY",  &minY);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "Width",    &sizeX);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "Height",   &sizeY);
     
-    status |= ADParam->setInteger(pCamera->params, ADBinX,  binX);
-    status |= ADParam->setInteger(pCamera->params, ADBinY,  binY);
-    status |= ADParam->setInteger(pCamera->params, ADMinX,  minX*binX);
-    status |= ADParam->setInteger(pCamera->params, ADMinY,  minY*binY);
-    status |= ADParam->setInteger(pCamera->params, ADImageSizeX, sizeX);
-    status |= ADParam->setInteger(pCamera->params, ADImageSizeY, sizeY);
+    status |= ADParam->setInteger(pPvt->params, ADBinX,  binX);
+    status |= ADParam->setInteger(pPvt->params, ADBinY,  binY);
+    status |= ADParam->setInteger(pPvt->params, ADMinX,  minX*binX);
+    status |= ADParam->setInteger(pPvt->params, ADMinY,  minY*binY);
+    status |= ADParam->setInteger(pPvt->params, ADImageSizeX, sizeX);
+    status |= ADParam->setInteger(pPvt->params, ADImageSizeY, sizeY);
     
-    if (status) PRINT(pCamera->logParam, ADTraceError, 
+    if (status) asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
                       "%s:PSGetGeometry error, status=%d\n", 
                       driverName, status);
     return(status);
 }
 
-static PSReadStats(DETECTOR_HDL pCamera)
+static PSReadStats(drvADPvt *pPvt)
 {
-    int status = AREA_DETECTOR_OK;
+    int status = asynSuccess;
     char buffer[50];
     int nchars;
     epicsUInt32 uval;
     float fval;
     
-    status |= PvAttrEnumGet      (pCamera->PvHandle, "StatDriverType", buffer, sizeof(buffer), &nchars);
-    status |= ADParam->setString (pCamera->params,  PSStatDriverType, buffer);
-    status |= PvAttrStringGet    (pCamera->PvHandle, "StatFilterVersion", buffer, sizeof(buffer), &nchars);
-    status |= ADParam->setString (pCamera->params,  PSStatFilterVersion, buffer);
-    status |= PvAttrFloat32Get   (pCamera->PvHandle, "StatFrameRate", &fval);
-    status |= ADParam->setDouble (pCamera->params,  PSStatFrameRate, fval);
-    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatFramesCompleted", &uval);
-    status |= ADParam->setInteger(pCamera->params,  PSStatFramesCompleted, (int)uval);
-    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatFramesDropped", &uval);
-    status |= ADParam->setInteger(pCamera->params,  PSStatFramesDropped, (int)uval);
-    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsErroneous", &uval);
-    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsErroneous, (int)uval);
-    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsMissed", &uval);
-    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsMissed, (int)uval);
-    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsReceived", &uval);
-    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsReceived, (int)uval);
-    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsRequested", &uval);
-    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsRequested, (int)uval);
-    status |= PvAttrUint32Get    (pCamera->PvHandle, "StatPacketsResent", &uval);
-    status |= ADParam->setInteger(pCamera->params,  PSStatPacketsResent, (int)uval);
-    if (status) PRINT(pCamera->logParam, ADTraceError, 
+    status |= PvAttrEnumGet      (pPvt->PvHandle, "StatDriverType", buffer, sizeof(buffer), &nchars);
+    status |= ADParam->setString (pPvt->params,  PSStatDriverType, buffer);
+    status |= PvAttrStringGet    (pPvt->PvHandle, "StatFilterVersion", buffer, sizeof(buffer), &nchars);
+    status |= ADParam->setString (pPvt->params,  PSStatFilterVersion, buffer);
+    status |= PvAttrFloat32Get   (pPvt->PvHandle, "StatFrameRate", &fval);
+    status |= ADParam->setDouble (pPvt->params,  PSStatFrameRate, fval);
+    status |= PvAttrUint32Get    (pPvt->PvHandle, "StatFramesCompleted", &uval);
+    status |= ADParam->setInteger(pPvt->params,  PSStatFramesCompleted, (int)uval);
+    status |= PvAttrUint32Get    (pPvt->PvHandle, "StatFramesDropped", &uval);
+    status |= ADParam->setInteger(pPvt->params,  PSStatFramesDropped, (int)uval);
+    status |= PvAttrUint32Get    (pPvt->PvHandle, "StatPacketsErroneous", &uval);
+    status |= ADParam->setInteger(pPvt->params,  PSStatPacketsErroneous, (int)uval);
+    status |= PvAttrUint32Get    (pPvt->PvHandle, "StatPacketsMissed", &uval);
+    status |= ADParam->setInteger(pPvt->params,  PSStatPacketsMissed, (int)uval);
+    status |= PvAttrUint32Get    (pPvt->PvHandle, "StatPacketsReceived", &uval);
+    status |= ADParam->setInteger(pPvt->params,  PSStatPacketsReceived, (int)uval);
+    status |= PvAttrUint32Get    (pPvt->PvHandle, "StatPacketsRequested", &uval);
+    status |= ADParam->setInteger(pPvt->params,  PSStatPacketsRequested, (int)uval);
+    status |= PvAttrUint32Get    (pPvt->PvHandle, "StatPacketsResent", &uval);
+    status |= ADParam->setInteger(pPvt->params,  PSStatPacketsResent, (int)uval);
+    if (status) asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
                       "%s:PSReadStatistics error, status=%d\n", 
                       driverName, status);
     return(status);
 }
 
-static PSReadParameters(DETECTOR_HDL pCamera)
+static PSReadParameters(drvADPvt *pPvt)
 {
-    int status = AREA_DETECTOR_OK;
+    int status = asynSuccess;
     tPvUint32 intVal;
     tPvFloat32 fltVal;
     double dval;
     int nchars;
     char buffer[20];
 
-    status |= PvAttrUint32Get(pCamera->PvHandle, "TotalBytesPerFrame", &intVal);
-    ADParam->setInteger(pCamera->params, ADImageSize, intVal);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "TotalBytesPerFrame", &intVal);
+    ADParam->setInteger(pPvt->params, ADImageSize, intVal);
 
     intVal = -1;
-    status |= PvAttrEnumGet(pCamera->PvHandle, "PixelFormat", buffer, sizeof(buffer), &nchars);
+    status |= PvAttrEnumGet(pPvt->PvHandle, "PixelFormat", buffer, sizeof(buffer), &nchars);
     if (!strcmp(buffer, "Mono8")) intVal = ADUInt8;
     else if (!strcmp(buffer, "Mono16")) intVal = ADUInt16;
     /* We don't support color modes yet */
-    status |= ADParam->setInteger(pCamera->params, ADDataType, intVal);
+    status |= ADParam->setInteger(pPvt->params, ADDataType, intVal);
     
-    status |= PSGetGeometry(pCamera);
+    status |= PSGetGeometry(pPvt);
 
-    status |= PvAttrUint32Get(pCamera->PvHandle, "AcquisitionFrameCount", &intVal);
-    status |= ADParam->setInteger(pCamera->params, ADNumFrames, intVal);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "AcquisitionFrameCount", &intVal);
+    status |= ADParam->setInteger(pPvt->params, ADNumFrames, intVal);
 
-    status |= PvAttrEnumGet(pCamera->PvHandle, "AcquisitionMode", buffer, sizeof(buffer), &nchars);
+    status |= PvAttrEnumGet(pPvt->PvHandle, "AcquisitionMode", buffer, sizeof(buffer), &nchars);
     if      (!strcmp(buffer, "SingleFrame")) intVal = ADFrameSingle;
     else if (!strcmp(buffer, "MultiFrame"))  intVal = ADFrameMultiple;
     else if (!strcmp(buffer, "Recorder"))    intVal = ADFrameMultiple;
     else if (!strcmp(buffer, "Continuous"))  intVal = ADFrameContinuous;
-    else {intVal=0; status |= AREA_DETECTOR_ERROR;}
-    status |= ADParam->setInteger(pCamera->params, ADFrameMode, intVal);
+    else {intVal=0; status |= asynError;}
+    status |= ADParam->setInteger(pPvt->params, ADFrameMode, intVal);
 
-    status |= PvAttrEnumGet(pCamera->PvHandle, "FrameStartTriggerMode", buffer, sizeof(buffer), &nchars);
+    status |= PvAttrEnumGet(pPvt->PvHandle, "FrameStartTriggerMode", buffer, sizeof(buffer), &nchars);
     for (intVal=0; intVal<NUM_START_TRIGGER_MODES; intVal++) {
         if (strcmp(buffer, PSTriggerStartStrings[intVal]) == 0) {
-            status |= ADParam->setInteger(pCamera->params, ADTriggerMode, intVal);
+            status |= ADParam->setInteger(pPvt->params, ADTriggerMode, intVal);
             break;
         }
     }
     if (intVal == NUM_START_TRIGGER_MODES) {
-        status |= ADParam->setInteger(pCamera->params, ADTriggerMode, 0);
-        status |= AREA_DETECTOR_ERROR;
+        status |= ADParam->setInteger(pPvt->params, ADTriggerMode, 0);
+        status |= asynError;
     }
     
     /* Prosilica does not support more than 1 exposure per frame */
-    status |= ADParam->setInteger(pCamera->params, ADNumExposures, 1);
+    status |= ADParam->setInteger(pPvt->params, ADNumExposures, 1);
 
     /* Prosilica uses integer microseconds */
-    status |= PvAttrUint32Get(pCamera->PvHandle, "ExposureValue", &intVal);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "ExposureValue", &intVal);
     dval = intVal / 1.e6;
-    status |= ADParam->setDouble(pCamera->params, ADAcquireTime, dval);
+    status |= ADParam->setDouble(pPvt->params, ADAcquireTime, dval);
 
     /* Prosilica uses a frame rate in Hz */
-    status |= PvAttrFloat32Get(pCamera->PvHandle, "FrameRate", &fltVal);
+    status |= PvAttrFloat32Get(pPvt->PvHandle, "FrameRate", &fltVal);
     dval = 1. / fltVal;
-    status |= ADParam->setDouble(pCamera->params, ADAcquirePeriod, dval);
+    status |= ADParam->setDouble(pPvt->params, ADAcquirePeriod, dval);
 
     /* Prosilica uses an integer value */
-    status |= PvAttrUint32Get(pCamera->PvHandle, "GainValue", &intVal);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "GainValue", &intVal);
     dval = intVal;
-    status |= ADParam->setDouble(pCamera->params, ADGain, dval);
+    status |= ADParam->setDouble(pPvt->params, ADGain, dval);
 
     /* Call the callbacks to update the values in higher layers */
-    ADParam->callCallbacks(pCamera->params);
+    ADParam->callCallbacks(pPvt->params);
     
-    if (status) PRINT(pCamera->logParam, ADTraceError, 
+    if (status) asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
                       "%s:PSReadParameters error, status=%d\n", 
                       driverName, status);
     return(status);
 }
 
-static int PSDisconnect(DETECTOR_HDL pCamera)
+static int PSDisconnect(drvADPvt *pPvt)
 {
-    int status = AREA_DETECTOR_OK;
+    int status = asynSuccess;
 
-    status |= PvCaptureQueueClear(pCamera->PvHandle);
-    status |= PvCaptureEnd(pCamera->PvHandle);
-    status |= PvCameraClose(pCamera->PvHandle);
-    PRINT(pCamera->logParam, ADTraceFlow, 
-          "%s:PSDisconnect: disconnecting camera %s\n", 
-          driverName, pCamera->ipAddr);
+    status |= PvCaptureQueueClear(pPvt->PvHandle);
+    status |= PvCaptureEnd(pPvt->PvHandle);
+    status |= PvCameraClose(pPvt->PvHandle);
+    asynPrint(pPvt->pasynUser, ASYN_TRACE_FLOW, 
+          "%s:PSDisconnect: disconnecting camera %d\n", 
+          driverName, pPvt->uniqueId);
     if (status) {
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:PSDisonnect: unable to close camera %s\n",
-              driverName, pCamera->ipAddr);
-       return AREA_DETECTOR_ERROR;
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+              "%s:PSDisonnect: unable to close camera %d\n",
+              driverName, pPvt->uniqueId);
+        return asynError;
     }
-    status |= ADParam->setInteger(pCamera->params, ADConnect, 0);
     return(status);
 }
 
-static int PSConnect(DETECTOR_HDL pCamera)
+static int PSConnect(drvADPvt *pPvt)
 {
-    struct in_addr inetAddr;
-    int status = AREA_DETECTOR_OK;
-    tPvIpSettings ipSettings;
+    int status = asynSuccess;
     int nchars;
     tPvFrame *pFrame;
     int i;
     size_t maxBytes;
     int bytesPerPixel;
 
-    /* Translate IP adress to number. */
-    status = hostToIPAddr(pCamera->ipAddr, &inetAddr);
+    status = PvCameraInfo(pPvt->uniqueId, &pPvt->PvCameraInfo);
     if (status) {
-        PRINT(pCamera->logParam, ADTraceError, 
-              "s:PSConnect: IP address not found %s\n", 
-              driverName, pCamera->ipAddr);
-        return AREA_DETECTOR_ERROR;
-    }
-    status = PvCameraInfoByAddr(inetAddr.s_addr, &pCamera->PvCameraInfo, &ipSettings);
-    if (status) {
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:PSConnect: Cannot find camera %s\n", 
-              driverName, pCamera->ipAddr);
-        return AREA_DETECTOR_ERROR;
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+              "%s:PSConnect: Cannot find camera %d\n", 
+              driverName, pPvt->uniqueId);
+        return asynError;
     }
 
-    if ((pCamera->PvCameraInfo.PermittedAccess & ePvAccessMaster) == 0) {
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:PSConnect: Cannot get control of camera %s\n", 
-               driverName, pCamera->ipAddr);
-        return AREA_DETECTOR_ERROR;
+    if ((pPvt->PvCameraInfo.PermittedAccess & ePvAccessMaster) == 0) {
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+              "%s:PSConnect: Cannot get control of camera %d\n", 
+               driverName, pPvt->uniqueId);
+        return asynError;
     }
 
-    status = PvCameraOpen(pCamera->PvCameraInfo.UniqueId, ePvAccessMaster, &pCamera->PvHandle);
+    status = PvCameraOpen(pPvt->uniqueId, ePvAccessMaster, &pPvt->PvHandle);
     if (status) {
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:PSConnect: unable to open camera %s\n",
-              driverName, pCamera->ipAddr);
-       return AREA_DETECTOR_ERROR;
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+              "%s:PSConnect: unable to open camera %d\n",
+              driverName, pPvt->uniqueId);
+       return asynError;
     }
     
     /* Initialize the frame buffers and queue them */
-    status = PvCaptureStart(pCamera->PvHandle);
+    status = PvCaptureStart(pPvt->PvHandle);
     if (status) {
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:PSConnect: unable to start capture on camera %s\n",
-              driverName, pCamera->ipAddr);
-        return AREA_DETECTOR_ERROR;
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+              "%s:PSConnect: unable to start capture on camera %d\n",
+              driverName, pPvt->uniqueId);
+        return asynError;
     }
 
     /* We allocate image buffers that are large enough for the biggest possible image.
@@ -473,26 +380,26 @@ static int PSConnect(DETECTOR_HDL pCamera)
        since changing readout parameters happens instantly, but there will still be frames
        queued with the wrong size */
     /* Query the parameters of the image sensor */
-    status = PvAttrEnumGet(pCamera->PvHandle, "SensorType", pCamera->sensorType, 
-                             sizeof(pCamera->sensorType), &nchars);
-    status |= PvAttrUint32Get(pCamera->PvHandle, "SensorBits", &pCamera->sensorBits);
-    status |= PvAttrUint32Get(pCamera->PvHandle, "SensorWidth", &pCamera->sensorWidth);
-    status |= PvAttrUint32Get(pCamera->PvHandle, "SensorHeight", &pCamera->sensorHeight);
-    status |= PvAttrStringGet(pCamera->PvHandle, "DeviceIPAddress", pCamera->IPAddress, 
-                              sizeof(pCamera->IPAddress), &nchars);
+    status = PvAttrEnumGet(pPvt->PvHandle, "SensorType", pPvt->sensorType, 
+                             sizeof(pPvt->sensorType), &nchars);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "SensorBits", &pPvt->sensorBits);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "SensorWidth", &pPvt->sensorWidth);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "SensorHeight", &pPvt->sensorHeight);
+    status |= PvAttrStringGet(pPvt->PvHandle, "DeviceIPAddress", pPvt->IPAddress, 
+                              sizeof(pPvt->IPAddress), &nchars);
     if (status) {
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:PSConnect: unable to get sensor data on camera\n",
-              driverName, pCamera->ipAddr);
-        return AREA_DETECTOR_ERROR;
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+              "%s:PSConnect: unable to get sensor data on camera %d\n",
+              driverName, pPvt->uniqueId);
+        return asynError;
     }
     
-    bytesPerPixel = (pCamera->sensorBits-1)/8 + 1;
+    bytesPerPixel = (pPvt->sensorBits-1)/8 + 1;
     /* If the camera supports color then there can be 4 values per pixel? */
-    if (strcmp(pCamera->sensorType, "Mono") != 0) bytesPerPixel *= 4;
-    maxBytes = pCamera->sensorWidth * pCamera->sensorHeight * bytesPerPixel;    
+    if (strcmp(pPvt->sensorType, "Mono") != 0) bytesPerPixel *= 4;
+    maxBytes = pPvt->sensorWidth * pPvt->sensorHeight * bytesPerPixel;    
     for (i=0; i<MAX_FRAMES; i++) {
-        pFrame = &pCamera->frame[i];
+        pFrame = &pPvt->frame[i];
         free(pFrame->ImageBuffer);
         pFrame->ImageBuffer = malloc(maxBytes);
         free(pFrame->AncillaryBuffer);
@@ -500,567 +407,685 @@ static int PSConnect(DETECTOR_HDL pCamera)
         pFrame->AncillaryBuffer = malloc(1000);
         pFrame->AncillaryBufferSize = 1000;
         if (!pFrame->ImageBuffer) {
-            PRINT(pCamera->logParam, ADTraceError, 
-                  "%s:PSConnect: unable to allocate ImageBuffer frame %d on camera %s\n",
-                  driverName, i, pCamera->ipAddr);
-            return AREA_DETECTOR_ERROR;
+            asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+                  "%s:PSConnect: unable to allocate ImageBuffer frame %d on camera %d\n",
+                  driverName, i, pPvt->uniqueId);
+            return asynError;
         }
         pFrame->ImageBufferSize = maxBytes;
-        pFrame->Context[0] = (void *)pCamera;
-        status = PvCaptureQueueFrame(pCamera->PvHandle, pFrame, PSFrameCallback); 
+        pFrame->Context[0] = (void *)pPvt;
+        status = PvCaptureQueueFrame(pPvt->PvHandle, pFrame, PSFrameCallback); 
         if (status) {
-            PRINT(pCamera->logParam, ADTraceError, 
-                  "%s:PSConnect: unable to queue frame %d on camera %s\n",
-                  driverName, i, pCamera->ipAddr);
-            return AREA_DETECTOR_ERROR;
+            asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+                  "%s:PSConnect: unable to queue frame %d on camera %d\n",
+                  driverName, i, pPvt->uniqueId);
+            return asynError;
         }
     }
 
     /* Set some initial values for other parameters */
-    status =  ADParam->setString (pCamera->params, ADManufacturer, "Prosilica");
-    status |= ADParam->setString (pCamera->params, ADModel, pCamera->PvCameraInfo.DisplayName);
-    status |= ADParam->setInteger(pCamera->params, ADSizeX, pCamera->sensorWidth);
-    status |= ADParam->setInteger(pCamera->params, ADSizeY, pCamera->sensorHeight);
-    status |= ADParam->setInteger(pCamera->params, ADMaxSizeX, pCamera->sensorWidth);
-    status |= ADParam->setInteger(pCamera->params, ADMaxSizeY, pCamera->sensorHeight);
+    status =  ADParam->setString (pPvt->params, ADManufacturer, "Prosilica");
+    status |= ADParam->setString (pPvt->params, ADModel, pPvt->PvCameraInfo.DisplayName);
+    status |= ADParam->setInteger(pPvt->params, ADSizeX, pPvt->sensorWidth);
+    status |= ADParam->setInteger(pPvt->params, ADSizeY, pPvt->sensorHeight);
+    status |= ADParam->setInteger(pPvt->params, ADMaxSizeX, pPvt->sensorWidth);
+    status |= ADParam->setInteger(pPvt->params, ADMaxSizeY, pPvt->sensorHeight);
     if (status) {
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:PSConnect: unable to set camera parameters on camera %s\n",
-              driverName, pCamera->ipAddr);
-        return AREA_DETECTOR_ERROR;
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+              "%s:PSConnect: unable to set camera parameters on camera %d\n",
+              driverName, pPvt->uniqueId);
+        return asynError;
     }
     
      /* Read the current camera settings */
-    status = PSReadParameters(pCamera);
+    status = PSReadParameters(pPvt);
     if (status) return(status);
 
     /* Read the current camera statistics */
-    status = PSReadStats(pCamera);
+    status = PSReadStats(pPvt);
     if (status) return(status);
         
-    /* We found the camera and everything is OK.  Set the flag. */
-    status |= ADParam->setInteger(pCamera->params, ADConnect, 1);
+    /* We found the camera and everything is OK.  Signal to asynManager that we are connected. */
+    pasynManager->exceptionConnect(pPvt->pasynUser);
     return(status);
 }
 
-static void ADReport(int level)
+static void PSRateTask(drvADPvt *pPvt)
 {
-    int i;
-    DETECTOR_HDL pCamera;
-
-    for(i=0; i<numCameras; i++) {
-        pCamera = &allCameras[i];
-        printf("Prosilica camera %d IP address=%s\n", i, pCamera->IPAddress);
-        if (level > 0) {
-            printf("  ID:                %ul\n", pCamera->PvCameraInfo.UniqueId);
-            printf("  Serial number:     %s\n",  pCamera->PvCameraInfo.SerialString);
-            printf("  Model:             %s\n",  pCamera->PvCameraInfo.DisplayName);
-            printf("  Sensor type:       %s\n",  pCamera->sensorType);
-            printf("  Sensor bits:       %d\n",  pCamera->sensorBits);
-            printf("  Sensor width:      %d\n",  pCamera->sensorWidth);
-            printf("  Sensor height:     %d\n",  pCamera->sensorHeight);
-            printf("  Frame buffer size: %d\n",  pCamera->frame[0].ImageBufferSize);
-        }
-        if (level > 5) {
-            printf("\nParameter library contents:\n");
-            ADParam->dump(pCamera->params);
-        }
-    }   
-}
-
-
-static int ADInit(void)
-{
-    return AREA_DETECTOR_OK;
-}
-
-static DETECTOR_HDL ADOpen(int card, char * param)
-{
-    DETECTOR_HDL pCamera;
-
-    if (card >= numCameras) return(NULL);
-    pCamera = &allCameras[card];
-    return pCamera;
-}
-
-static int ADClose(DETECTOR_HDL pCamera)
-{
-    int status = AREA_DETECTOR_OK;
+    /* This thread just computes the average frame rate */
+    int frameCounter, prevFrameCounter;
+    double rate, frameRateTime, deltaTime;
+    epicsTimeStamp tNow, tPrevious;
     
-    PRINT(pCamera->logParam, ADTraceFlow, 
-          "%s:ADClose: closing camera %s\n", 
-          driverName, pCamera->ipAddr);
-    status = PSDisconnect(pCamera);
-    return(status);
-}
-
-/* Note: ADSetLog, ADFindParam, ADSetInt32Callback, ADSetFloat64Callback, 
- * and ADSetImageDataCallback can usually be used with no modifications in new drivers. */
- 
-static int ADSetLog( DETECTOR_HDL pCamera, ADLogFunc logFunc, void * param )
-{
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    if (logFunc == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
-    pCamera->logFunc=logFunc;
-    pCamera->logParam = param;
-    epicsMutexUnlock(pCamera->mutexId);
-    return AREA_DETECTOR_OK;
-}
-
-static int ADFindParam( DETECTOR_HDL pCamera, const char *paramString, int *function )
-{
-    int i;
-    int status = AREA_DETECTOR_ERROR;
-    int ncommands = sizeof(DetCommands)/sizeof(DetCommands[0]);
-
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    for (i=0; i < ncommands; i++) {
-        if (epicsStrCaseCmp(paramString, DetCommands[i].commandString) == 0) {
-            *function = DetCommands[i].command;
-            status = AREA_DETECTOR_OK;
-            break;
-        }
+    epicsMutexLock(pPvt->mutexId);
+    ADParam->getInteger(pPvt->params, ADFrameCounter, &prevFrameCounter);
+    epicsTimeGetCurrent(&tPrevious);
+    /* Get the time we need to sleep before the next frame rate computation */
+    ADParam->getDouble(pPvt->params, ADFrameRateTime, &frameRateTime);
+    epicsMutexUnlock(pPvt->mutexId);
+    
+    /* Loop forever */
+    while (1) {
+        /* Sleep for the frameRateTime */
+        epicsThreadSleep(frameRateTime);
+        epicsMutexLock(pPvt->mutexId);
+        
+        /* Measure exactly how long since the last update */
+        epicsTimeGetCurrent(&tNow);
+        deltaTime = epicsTimeDiffInSeconds(&tNow, &tPrevious);
+        
+        /* Compute the rate */
+        ADParam->getInteger(pPvt->params, ADFrameCounter, &frameCounter);
+        rate = (frameCounter - prevFrameCounter) / deltaTime;
+        ADParam->setDouble(pPvt->params, ADFrameRate, rate);
+        
+        /* Store the new values */
+        prevFrameCounter = frameCounter;
+        memcpy(&tPrevious, &tNow, sizeof(tNow));
+        ADParam->callCallbacks(pPvt->params);
+        epicsMutexUnlock(pPvt->mutexId);
     }
-    if (status) 
-        PRINT(pCamera->logParam, ADTraceIODriver, 
-              "%s:ADFindParam: not a valid string=%s\n", 
-              driverName, paramString);
-    else        
-        PRINT(pCamera->logParam, ADTraceIODriver, 
-              "%s:ADFindParam: found value string=%s, function=%d\n",
-              driverName, paramString, *function);
-    return status;
 }
 
-static int ADSetInt32Callback(DETECTOR_HDL pCamera, ADInt32CallbackFunc callback, void * param)
+
+/* asynInt32 interface functions */
+static asynStatus readInt32(void *drvPvt, asynUser *pasynUser, 
+                            epicsInt32 *value)
 {
-    int status = AREA_DETECTOR_OK;
-    
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
-    status = ADParam->setIntCallback(pCamera->params, callback, param);
-    epicsMutexUnlock(pCamera->mutexId);
-    return(status);
-}
+    drvADPvt *pPvt = (drvADPvt *)drvPvt;
+    int function = pasynUser->reason;
+    asynStatus status = asynSuccess;
 
-static int ADSetFloat64Callback(DETECTOR_HDL pCamera, ADFloat64CallbackFunc callback, void * param)
-{
-    int status = AREA_DETECTOR_OK;
-    
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
-    status = ADParam->setDoubleCallback(pCamera->params, callback, param);
-    epicsMutexUnlock(pCamera->mutexId);
-    return(status);
-}
-
-static int ADSetStringCallback(DETECTOR_HDL pCamera, ADStringCallbackFunc callback, void * param)
-{
-    int status = AREA_DETECTOR_OK;
-    
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
-    status = ADParam->setStringCallback(pCamera->params, callback, param);
-    epicsMutexUnlock(pCamera->mutexId);
-    return(status);
-}
-
-static int ADSetImageDataCallback(DETECTOR_HDL pCamera, ADImageDataCallbackFunc callback, void * param)
-{
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
-    pCamera->pImageDataCallback = callback;
-    pCamera->imageDataCallbackParam = param;
-    epicsMutexUnlock(pCamera->mutexId);
-    return AREA_DETECTOR_OK;
-}
-
-static int ADGetInteger(DETECTOR_HDL pCamera, int function, int * value)
-{
-    int status = AREA_DETECTOR_OK;
-    
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
+    epicsMutexLock(pPvt->mutexId);
     
     /* We just read the current value of the parameter from the parameter library.
      * Those values are updated whenever anything could cause them to change */
-    status = ADParam->getInteger(pCamera->params, function, value);
+    status = ADParam->getInteger(pPvt->params, function, value);
     if (status) 
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:ADGetInteger error, status=%d function=%d, value=%d\n", 
-              driverName, status, function, *value);
+        asynPrint(pasynUser, ASYN_TRACE_ERROR, 
+                  "%s:readInt32 error, status=%d function=%d, value=%d\n", 
+                  driverName, status, function, *value);
     else        
-        PRINT(pCamera->logParam, ADTraceIODriver, 
-              "%s:ADGetInteger: function=%d, value=%d\n", 
+        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:readInt32: function=%d, value=%d\n", 
               driverName, function, *value);
-    epicsMutexUnlock(pCamera->mutexId);
+    epicsMutexUnlock(pPvt->mutexId);
     return(status);
 }
 
-static int ADSetInteger(DETECTOR_HDL pCamera, int function, int value)
+static asynStatus writeInt32(void *drvPvt, asynUser *pasynUser, 
+                             epicsInt32 value)
 {
-    int status = AREA_DETECTOR_OK;
-    tPvUint32 intVal = value;
+    drvADPvt *pPvt = (drvADPvt *)drvPvt;
+    int function = pasynUser->reason;
+    asynStatus status = asynSuccess;
+    tPvInt32 intVal;
+    int reset=0;
 
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
+    epicsMutexLock(pPvt->mutexId);
 
     /* Set the parameter in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
-    status |= ADParam->setInteger(pCamera->params, function, value);
+    status |= ADParam->setInteger(pPvt->params, function, value);
 
     switch (function) {
-    case ADConnect:
-        if (value) status |= PSConnect(pCamera);
-        else       status |= PSDisconnect(pCamera);
-        break;
-    case ADBinX:
-    case ADBinY:
-    case ADMinX:
-    case ADSizeX:
-    case ADMinY:
-    case ADSizeY:
-        /* These commands change the chip readout geometry.  We need to cache them and apply them in the
-         * correct order */
-        status |= PSSetGeometry(pCamera);
-        break;
-    case ADNumFrames:
-        status |= PvAttrUint32Set(pCamera->PvHandle, "AcquisitionFrameCount", intVal);
-        break;
-    case ADFrameMode:
-        switch(value) {
-        case ADFrameSingle:
-            status |= PvAttrEnumSet(pCamera->PvHandle, "AcquisitionMode", "SingleFrame");
+        case ADBinX:
+        case ADBinY:
+        case ADMinX:
+        case ADSizeX:
+        case ADMinY:
+        case ADSizeY:
+            /* These commands change the chip readout geometry.  We need to cache them and apply them in the
+             * correct order */
+            status |= PSSetGeometry(pPvt);
             break;
-        case ADFrameMultiple:
-            status |= PvAttrEnumSet(pCamera->PvHandle, "AcquisitionMode", "MultiFrame");
+        case ADNumFrames:
+            status |= PvAttrUint32Set(pPvt->PvHandle, "AcquisitionFrameCount", intVal);
             break;
-        case ADFrameContinuous:
-            status |= PvAttrEnumSet(pCamera->PvHandle, "AcquisitionMode", "Continuous");
-            break;
-        }
-        break;
-    case ADAcquire:
-        if (value) {
-            /* We need to set the number of frames we expect to collect, so the frame callback function
-               can know when acquisition is complete.  We need to find out what mode we are in and how
-               many frames have been requested.  If we are in continuous mode then set the number of
-               remaining frames to -1. */
-            int frameMode, numFrames;
-            status |= ADParam->getInteger(pCamera->params, ADFrameMode, &frameMode);
-            status |= ADParam->getInteger(pCamera->params, ADNumFrames, &numFrames);
-            switch(frameMode) {
+        case ADFrameMode:
+            switch(value) {
             case ADFrameSingle:
-                pCamera->framesRemaining = 1;
+                status |= PvAttrEnumSet(pPvt->PvHandle, "AcquisitionMode", "SingleFrame");
                 break;
             case ADFrameMultiple:
-                pCamera->framesRemaining = numFrames;
+                status |= PvAttrEnumSet(pPvt->PvHandle, "AcquisitionMode", "MultiFrame");
                 break;
             case ADFrameContinuous:
-                pCamera->framesRemaining = -1;
+                status |= PvAttrEnumSet(pPvt->PvHandle, "AcquisitionMode", "Continuous");
                 break;
             }
-            ADParam->setInteger(pCamera->params, ADStatus, ADStatusAcquire);
-            status |= PvCommandRun(pCamera->PvHandle, "AcquisitionStart");
-        } else {
-            ADParam->setInteger(pCamera->params, ADStatus, ADStatusIdle);
-            status |= PvCommandRun(pCamera->PvHandle, "AcquisitionAbort");
-        }
-        break;
-    case ADTriggerMode:
-        if ((value < 0) || (value > (NUM_START_TRIGGER_MODES-1))) {
-            status = AREA_DETECTOR_ERROR;
             break;
-        }
-        status |= PvAttrEnumSet(pCamera->PvHandle, "FrameStartTriggerMode", 
-                                PSTriggerStartStrings[value]);
-        break;
-    case PSReadStatistics:
-        PSReadStats(pCamera);
-        break;
-    case ADWriteFile:
-        status = PSWriteFile(pCamera);
-        break;
-    case ADDataType:
-        switch (value) {
-            case ADInt8:
-            case ADUInt8:
-                status |= PvAttrEnumSet(pCamera->PvHandle, "PixelFormat", "Mono8");
+        case ADAcquire:
+            if (value) {
+                /* We need to set the number of frames we expect to collect, so the frame callback function
+                   can know when acquisition is complete.  We need to find out what mode we are in and how
+                   many frames have been requested.  If we are in continuous mode then set the number of
+                   remaining frames to -1. */
+                int frameMode, numFrames;
+                status |= ADParam->getInteger(pPvt->params, ADFrameMode, &frameMode);
+                status |= ADParam->getInteger(pPvt->params, ADNumFrames, &numFrames);
+                switch(frameMode) {
+                case ADFrameSingle:
+                    pPvt->framesRemaining = 1;
+                    break;
+                case ADFrameMultiple:
+                    pPvt->framesRemaining = numFrames;
+                    break;
+                case ADFrameContinuous:
+                    pPvt->framesRemaining = -1;
+                    break;
+                }
+                ADParam->setInteger(pPvt->params, ADStatus, ADStatusAcquire);
+                status |= PvCommandRun(pPvt->PvHandle, "AcquisitionStart");
+            } else {
+                ADParam->setInteger(pPvt->params, ADStatus, ADStatusIdle);
+                status |= PvCommandRun(pPvt->PvHandle, "AcquisitionAbort");
+            }
+            break;
+        case ADTriggerMode:
+            if ((value < 0) || (value > (NUM_START_TRIGGER_MODES-1))) {
+                status = asynError;
                 break;
-            case ADInt16:
-            case ADUInt16:
-                status |= PvAttrEnumSet(pCamera->PvHandle, "PixelFormat", "Mono16");
-                break;
-            /* We don't support other formats yet */
-            default:
-                PRINT(pCamera->logParam, ADTraceError, 
-                    "%s:ADSetInteger error unsupported data type %d\n", 
-                    driverName, value);
-                status |= AREA_DETECTOR_ERROR;
-                break;
-        }      
+            }
+            status |= PvAttrEnumSet(pPvt->PvHandle, "FrameStartTriggerMode", 
+                                    PSTriggerStartStrings[value]);
+            break;
+        case PSReadStatistics:
+            PSReadStats(pPvt);
+            break;
+        case ADWriteFile:
+            status = PSWriteFile(pPvt);
+            break;
+        case ADDataType:
+            switch (value) {
+                case ADInt8:
+                case ADUInt8:
+                    status |= PvAttrEnumSet(pPvt->PvHandle, "PixelFormat", "Mono8");
+                    break;
+                case ADInt16:
+                case ADUInt16:
+                    status |= PvAttrEnumSet(pPvt->PvHandle, "PixelFormat", "Mono16");
+                    break;
+                /* We don't support other formats yet */
+                default:
+                    asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+                        "%s:ADSetInteger error unsupported data type %d\n", 
+                        driverName, value);
+                    status |= asynError;
+                    break;
+            }      
     }
     
     /* Read the camera parameters and do callbacks */
-    status |= PSReadParameters(pCamera);
-    
+    status |= PSReadParameters(pPvt);    
     if (status) 
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:ADSetInteger error, status=%d function=%d, value=%d\n", 
+        asynPrint(pasynUser, ASYN_TRACE_ERROR, 
+              "%s:writeInt32 error, status=%d function=%d, value=%d\n", 
               driverName, status, function, value);
     else        
-        PRINT(pCamera->logParam, ADTraceIODriver, 
-              "%s:ADSetInteger: function=%d, value=%d\n", 
+        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:writeInt32: function=%d, value=%d\n", 
               driverName, function, value);
-    epicsMutexUnlock(pCamera->mutexId);
+    epicsMutexUnlock(pPvt->mutexId);
     return status;
 }
 
-
-static int ADGetDouble(DETECTOR_HDL pCamera, int function, double * value)
+static asynStatus getBounds(void *drvPvt, asynUser *pasynUser,
+                            epicsInt32 *low, epicsInt32 *high)
 {
-    int status = AREA_DETECTOR_OK;
+    /* This is only needed for the asynInt32 interface when the device uses raw units.
+       Our interface is using engineering units. */
+    *low = 0;
+    *high = 65535;
+    asynPrint(pasynUser, ASYN_TRACEIO_DRIVER,
+              "%s::getBounds,low=%d, high=%d\n", driverName, *low, *high);
+    return(asynSuccess);
+}
+
+
+/* asynFloat64 interface methods */
+static asynStatus readFloat64(void *drvPvt, asynUser *pasynUser,
+                              epicsFloat64 *value)
+{
+    drvADPvt *pPvt = (drvADPvt *)drvPvt;
+    int function = pasynUser->reason;
+    asynStatus status = asynSuccess;
     
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
+    epicsMutexLock(pPvt->mutexId);
     /* We just read the current value of the parameter from the parameter library.
      * Those values are updated whenever anything could cause them to change */
-    status = ADParam->getDouble(pCamera->params, function, value);
+    status = ADParam->getDouble(pPvt->params, function, value);
     if (status) 
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:ADGetDouble error, status=%d function=%d, value=%f\n", 
+        asynPrint(pasynUser, ASYN_TRACE_ERROR, 
+              "%s:readFloat64 error, status=%d function=%d, value=%f\n", 
               driverName, status, function, *value);
     else        
-        PRINT(pCamera->logParam, ADTraceIODriver, 
-              "%s:ADGetDouble: function=%d, value=%f\n", 
+        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:readFloat64: function=%d, value=%f\n", 
               driverName, function, *value);
-    epicsMutexUnlock(pCamera->mutexId);
+    epicsMutexUnlock(pPvt->mutexId);
     return(status);
 }
 
-static int ADSetDouble(DETECTOR_HDL pCamera, int function, double value)
+static asynStatus writeFloat64(void *drvPvt, asynUser *pasynUser, 
+                               epicsFloat64 value)
 {
-    int status = AREA_DETECTOR_OK;
+    drvADPvt *pPvt = (drvADPvt *)drvPvt;
+    int function = pasynUser->reason;
+    asynStatus status = asynSuccess;
     tPvUint32 intVal;
     tPvFloat32 fltVal;
 
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
+    epicsMutexLock(pPvt->mutexId);
 
     /* Set the parameter in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
-    status |= ADParam->setDouble(pCamera->params, function, value);
+    status |= ADParam->setDouble(pPvt->params, function, value);
 
     switch (function) {
     case ADAcquireTime:
         /* Prosilica uses integer microseconds */
         intVal = (tPvUint32) (value * 1e6);
-        status |= PvAttrUint32Set(pCamera->PvHandle, "ExposureValue", intVal);
+        status |= PvAttrUint32Set(pPvt->PvHandle, "ExposureValue", intVal);
         break;
     case ADAcquirePeriod:
         /* Prosilica uses a frame rate in Hz */
         if (value == 0.) value = .01;
         fltVal = (tPvFloat32) (1. / value);
-        status |= PvAttrFloat32Set(pCamera->PvHandle, "FrameRate", fltVal);
+        status |= PvAttrFloat32Set(pPvt->PvHandle, "FrameRate", fltVal);
         break;
     case ADGain:
         /* Prosilica uses an integer value */
         intVal = (tPvUint32) (value);
-        status |= PvAttrUint32Set(pCamera->PvHandle, "GainValue", intVal);
+        status |= PvAttrUint32Set(pPvt->PvHandle, "GainValue", intVal);
         break;
     default:
         break;
     }
 
     /* Read the camera parameters and do callbacks */
-    status |= PSReadParameters(pCamera);
-    
+    status |= PSReadParameters(pPvt);
     if (status) 
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:ADSetDouble error, status=%d function=%d, value=%f\n", 
+        asynPrint(pasynUser, ASYN_TRACE_ERROR, 
+              "%s:writeFloat64 error, status=%d function=%d, value=%f\n", 
               driverName, status, function, value);
     else        
-        PRINT(pCamera->logParam, ADTraceIODriver, 
-              "%s:ADSetDouble: function=%d, value=%f\n", 
+        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:writeFloat64: function=%d, value=%f\n", 
               driverName, function, value);
-    epicsMutexUnlock(pCamera->mutexId);
+    epicsMutexUnlock(pPvt->mutexId);
     return status;
 }
 
-static int ADGetString(DETECTOR_HDL pCamera, int function, int maxChars, char * value)
+
+/* asynOctet interface methods */
+static asynStatus readOctet(void *drvPvt, asynUser *pasynUser,
+                            char *value, size_t maxChars, size_t *nActual,
+                            int *eomReason)
 {
-    int status = AREA_DETECTOR_OK;
+    drvADPvt *pPvt = (drvADPvt *)drvPvt;
+    int function = pasynUser->reason;
+    asynStatus status = asynSuccess;
    
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
+    epicsMutexLock(pPvt->mutexId);
     /* We just read the current value of the parameter from the parameter library.
      * Those values are updated whenever anything could cause them to change */
-    status = ADParam->getString(pCamera->params, function, maxChars, value);
+    status = ADParam->getString(pPvt->params, function, maxChars, value);
     if (status) 
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:ADGetString error, status=%d function=%d, value=%s\n", 
+        asynPrint(pasynUser, ASYN_TRACE_ERROR, 
+              "%s:readOctet error, status=%d function=%d, value=%s\n", 
               driverName, status, function, value);
     else        
-        PRINT(pCamera->logParam, ADTraceIODriver, 
-              "%s:ADGetString: function=%d, value=%s\n", 
+        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:readOctet: function=%d, value=%s\n", 
               driverName, function, value);
-    epicsMutexUnlock(pCamera->mutexId);
+    *eomReason = ASYN_EOM_END;
+    *nActual = strlen(value);
+    epicsMutexUnlock(pPvt->mutexId);
     return(status);
 }
 
-static int ADSetString(DETECTOR_HDL pCamera, int function, const char *value)
+static asynStatus writeOctet(void *drvPvt, asynUser *pasynUser,
+                             const char *value, size_t nChars, size_t *nActual)
 {
-    int status = AREA_DETECTOR_OK;
+    drvADPvt *pPvt = (drvADPvt *)drvPvt;
+    int function = pasynUser->reason;
+    asynStatus status = asynSuccess;
 
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
+    epicsMutexLock(pPvt->mutexId);
     /* Set the parameter in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
-    status |= ADParam->setString(pCamera->params, function, (char *)value);
+    status |= ADParam->setString(pPvt->params, function, (char *)value);
     /* Do callbacks so higher layers see any changes */
-    ADParam->callCallbacks(pCamera->params);
+    ADParam->callCallbacks(pPvt->params);
     if (status) 
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:ADSetString error, status=%d function=%d, value=%s\n", 
+        asynPrint(pasynUser, ASYN_TRACE_ERROR, 
+              "%s:writeOctet error, status=%d function=%d, value=%s\n", 
               driverName, status, function, value);
     else        
-        PRINT(pCamera->logParam, ADTraceIODriver, 
-              "%s:ASGetString: function=%d, value=%s\n", 
+        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:writeOctet: function=%d, value=%s\n", 
               driverName, function, value);
-    epicsMutexUnlock(pCamera->mutexId);
+    *nActual = nChars;
+    epicsMutexUnlock(pPvt->mutexId);
     return status;
 }
 
-static int ADGetImage(DETECTOR_HDL pCamera, int maxBytes, void *buffer)
+/* asynADImage interface methods */
+static asynStatus readADImage(void *drvPvt, asynUser *pasynUser, void *data, int maxBytes,
+                       int *dataType, int *nx, int *ny)
 {
+    drvADPvt *pPvt = (drvADPvt *)drvPvt;
     tPvFrame *pFrame; 
     int nCopy;
-    int status = AREA_DETECTOR_OK;
+    int status = asynSuccess;
     
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
-    if (pCamera->lastFrame == NULL) {
-       status = AREA_DETECTOR_ERROR;
+    epicsMutexLock(pPvt->mutexId);
+
+    if (pPvt->lastFrame == NULL) {
+       status = asynError;
     } else {
-        pFrame = pCamera->lastFrame;    
+        pFrame = pPvt->lastFrame;    
         nCopy = pFrame->ImageSize;
         if (nCopy > maxBytes) nCopy = maxBytes;
-        memcpy(buffer, pFrame->ImageBuffer, nCopy);
+        memcpy(data, pFrame->ImageBuffer, nCopy);
+
+        /* Convert from the PvApi data types to ADDataType */
+        switch(pFrame->Format) {
+            case ePvFmtMono8:
+            case ePvFmtBayer8:
+                *dataType = ADUInt8;
+                break;
+            case ePvFmtMono16:
+            case ePvFmtBayer16:
+                *dataType = ADUInt16;
+                break;
+            default:
+                /* Note, this is wrong it does not work for ePvFmtRgb48, which is 48 bits */
+                *dataType = ADUInt32;
+                break;
+        }
+        *nx = pFrame->Width;
+        *ny = pFrame->Height;
     }
-    
     if (status) 
-        PRINT(pCamera->logParam, ADTraceError, 
-              "%s:ADGetImage error, status=%d maxBytes=%d, buffer=%p\n", 
-              driverName, status, maxBytes, buffer);
+        asynPrint(pasynUser, ASYN_TRACE_ERROR, 
+              "%s:readADImage error, status=%d maxBytes=%d, data=%p\n", 
+              driverName, status, maxBytes, data);
     else        
-        PRINT(pCamera->logParam, ADTraceIODriver, 
-              "%s:ADGetImage error, maxBytes=%d, buffer=%p\n", 
-              driverName, maxBytes, buffer);
-    epicsMutexUnlock(pCamera->mutexId);
+        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:readADImage error, maxBytes=%d, data=%p\n", 
+              driverName, maxBytes, data);
+    epicsMutexUnlock(pPvt->mutexId);
     return status;
 }
 
-static int ADSetImage(DETECTOR_HDL pCamera, int maxBytes, void *buffer)
+static asynStatus writeADImage(void *drvPvt, asynUser *pasynUser, void *data,
+                        int dataType, int nx, int ny)
 {
-    int status = AREA_DETECTOR_OK;
+    drvADPvt *pPvt = (drvADPvt *)drvPvt;
+    int status = asynSuccess;
     
-    if (pCamera == NULL) return AREA_DETECTOR_ERROR;
-    epicsMutexLock(pCamera->mutexId);
+    if (pPvt == NULL) return asynError;
+    epicsMutexLock(pPvt->mutexId);
 
-    /* The Prosilica does not allow downloading image data */    
-    PRINT(pCamera->logParam, ADTraceIODriver, 
+    /* The simDetector does not allow downloading image data */    
+    asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
           "%s:ADSetImage not currently supported\n", driverName);
-    status = AREA_DETECTOR_ERROR;
-    epicsMutexUnlock(pCamera->mutexId);
+    status = asynError;
+    epicsMutexUnlock(pPvt->mutexId);
     return status;
 }
 
 
-static int PSLogMsg(void * param, const ADLogMask_t mask, const char *pFormat, ...)
+/* asynDrvUser routines */
+static asynStatus drvUserCreate(void *drvPvt, asynUser *pasynUser,
+                                const char *drvInfo, 
+                                const char **pptypeName, size_t *psize)
 {
+    int status;
+    int param;
 
-    va_list     pvar;
-    int         nchar;
-
-    va_start(pvar, pFormat);
-    nchar = vfprintf(stdout,pFormat,pvar);
-    va_end (pvar);
-    printf("\n");
-    return(nchar);
-}
-
-
-int prosilicaSetup(int num_cameras)   /* number of Prosilica cameras in system.  */
-{
-
-    if (num_cameras < 1) {
-        printf("prosilicaSetup, num_cameras must be > 0\n");
-        return AREA_DETECTOR_ERROR;
-    }
-    numCameras = num_cameras;
-    allCameras = (camera_t *)calloc(numCameras, sizeof(camera_t)); 
-    return AREA_DETECTOR_OK;
-}
-
-
-int prosilicaConfig(int camera,     /* Camera number */
-                    char *ipAddr)   /* IP address of this camera. */
-
-{
-    DETECTOR_HDL pCamera;
-    int status = AREA_DETECTOR_OK;
-
-    if (numCameras < 1) {
-        printf("%s:PSConnect: no Prosilica cameras allocated, call prosilicaSetup first\n");
-        return AREA_DETECTOR_ERROR;
-    }
-    if ((camera < 0) || (camera >= numCameras)) {
-        printf("%s:PSConnect: camera must in range 0 to %d\n", driverName, numCameras-1);
-        return AREA_DETECTOR_ERROR;
-    }
-    pCamera = &allCameras[camera];
-    pCamera->camera = camera;
+    /* See if this is one of the standard parameters */
+    status = ADUtils->findParam(ADStandardParamString, NUM_AD_STANDARD_PARAMS, 
+                                drvInfo, &param);
+                                
+    /* If we did not find it in that table try our driver-specific table */
+    if (status) status = ADUtils->findParam(PSDetParamString, NUM_PS_DET_PARAMS, 
+                                            drvInfo, &param);
     
+    if (status == asynSuccess) {
+        pasynUser->reason = param;
+        if (pptypeName) {
+            *pptypeName = epicsStrDup(drvInfo);
+        }
+        if (psize) {
+            *psize = sizeof(param);
+        }
+        asynPrint(pasynUser, ASYN_TRACE_FLOW,
+                  "%s::drvUserCreate, drvInfo=%s, param=%d\n", 
+                  driverName, drvInfo, param);
+        return(asynSuccess);
+    } else {
+        epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize,
+                     "%s::drvUserCreate, unknown drvInfo=%s", 
+                     driverName, drvInfo);
+        return(asynError);
+    }
+}
+    
+static asynStatus drvUserGetType(void *drvPvt, asynUser *pasynUser,
+                                 const char **pptypeName, size_t *psize)
+{
+    /* This is not currently supported, because we can't get the strings for driver-specific commands */
+
+    asynPrint(pasynUser, ASYN_TRACE_FLOW,
+              "%s::drvUserGetType entered",
+              driverName);
+    *pptypeName = NULL;
+    *psize = 0;
+    return(asynError);
+}
+
+static asynStatus drvUserDestroy(void *drvPvt, asynUser *pasynUser)
+{
+    /* Nothing to do because we did not allocate any resources */
+    asynPrint(pasynUser, ASYN_TRACE_FLOW,
+              "%s::drvUserDestroy, drvPvt=%p, pasynUser=%p\n",
+              driverName, drvPvt, pasynUser);
+    return(asynSuccess);
+}
+
+
+/* asynCommon interface methods */
+
+static asynStatus connect(void *drvPvt, asynUser *pasynUser)
+{
+    pasynManager->exceptionConnect(pasynUser);
+
+    asynPrint(pasynUser, ASYN_TRACE_FLOW,
+          "%s::connect, pasynUser=%p\n", 
+          driverName, pasynUser);
+    return(asynSuccess);
+}
+
+
+static asynStatus disconnect(void *drvPvt, asynUser *pasynUser)
+{
+    pasynManager->exceptionDisconnect(pasynUser);
+    return(asynSuccess);
+}
+
+static void report(void *drvPvt, FILE *fp, int details)
+{
+    drvADPvt *pPvt = (drvADPvt *)drvPvt;
+
+    fprintf(fp, "Prosilica camera %s Unique ID=%d\n", 
+            pPvt->portName, pPvt->uniqueId);
+    if (details > 0) {
+        fprintf(fp, "  ID:                %ul\n", pPvt->PvCameraInfo.UniqueId);
+        fprintf(fp, "  Serial number:     %s\n",  pPvt->PvCameraInfo.SerialString);
+        fprintf(fp, "  Model:             %s\n",  pPvt->PvCameraInfo.DisplayName);
+        fprintf(fp, "  Sensor type:       %s\n",  pPvt->sensorType);
+        fprintf(fp, "  Sensor bits:       %d\n",  pPvt->sensorBits);
+        fprintf(fp, "  Sensor width:      %d\n",  pPvt->sensorWidth);
+        fprintf(fp, "  Sensor height:     %d\n",  pPvt->sensorHeight);
+        fprintf(fp, "  Frame buffer size: %d\n",  pPvt->frame[0].ImageBufferSize);
+    }
+    if (details > 5) {
+        fprintf(fp, "\nParameter library contents:\n");
+        ADParam->dump(pPvt->params);
+    }
+}
+
+
+/* Structures with function pointers for each of the asyn interfaces */
+static asynCommon ifaceCommon = {
+    report,
+    connect,
+    disconnect
+};
+
+static asynInt32 ifaceInt32 = {
+    writeInt32,
+    readInt32,
+    getBounds
+};
+
+static asynFloat64 ifaceFloat64 = {
+    writeFloat64,
+    readFloat64
+};
+
+static asynOctet ifaceOctet = {
+    writeOctet,
+    NULL,
+    readOctet,
+};
+
+static asynDrvUser ifaceDrvUser = {
+    drvUserCreate,
+    drvUserGetType,
+    drvUserDestroy
+};
+
+static asynADImage ifaceADImage = {
+    writeADImage,
+    readADImage
+};
+
+
+
+int prosilicaConfig(char *portName, /* Port name */
+                    int uniqueId)   /* Unique ID # of this camera. */
+
+{
+    drvADPvt *pPvt;
+    int status = asynSuccess;
+    char *functionName = "simDetectorConfig";
+    asynStandardInterfaces *pInterfaces;
+
+    pPvt = callocMustSucceed(1, sizeof(*pPvt), functionName);
+    pPvt->portName = epicsStrDup(portName);
+    pPvt->uniqueId = uniqueId;
+ 
+    status = pasynManager->registerPort(portName,
+                                        ASYN_MULTIDEVICE | ASYN_CANBLOCK,
+                                        1,  /*  autoconnect */
+                                        0,  /* medium priority */
+                                        0); /* default stack size */
+    if (status != asynSuccess) {
+        printf("%s ERROR: Can't register port\n", functionName);
+        return(asynError);
+    }
+
+    /* Create asynUser for debugging */
+    pPvt->pasynUser = pasynManager->createAsynUser(0, 0);
+
+    pInterfaces = &pPvt->asynInterfaces;
+    
+    /* Initialize interface pointers */
+    pInterfaces->common.pinterface        = (void *)&ifaceCommon;
+    pInterfaces->drvUser.pinterface       = (void *)&ifaceDrvUser;
+    pInterfaces->octet.pinterface         = (void *)&ifaceOctet;
+    pInterfaces->int32.pinterface         = (void *)&ifaceInt32;
+    pInterfaces->float64.pinterface       = (void *)&ifaceFloat64;
+
+    /* Define which interfaces can generate interrupts */
+    pInterfaces->octetCanInterrupt        = 1;
+    pInterfaces->int32CanInterrupt        = 1;
+    pInterfaces->float64CanInterrupt      = 1;
+
+    status = pasynStandardInterfacesBase->initialize(portName, pInterfaces,
+                                                     pPvt->pasynUser, pPvt);
+    if (status != asynSuccess) {
+        printf("%s ERROR: Can't register interfaces: %s.\n",
+               functionName, pPvt->pasynUser->errorMessage);
+        return(asynError);
+    }
+    
+    /* Register the asynADImage interface */
+    pPvt->asynADImage.interfaceType = asynADImageType;
+    pPvt->asynADImage.pinterface = (void *)&ifaceADImage;
+    pPvt->asynADImage.drvPvt = pPvt;
+    status = pasynADImageBase->initialize(portName, &pPvt->asynADImage);
+    if (status != asynSuccess) {
+        printf("%s: Can't register asynADImage\n", functionName);
+        return(asynError);
+    }
+    status = pasynManager->registerInterruptSource(portName, &pPvt->asynADImage,
+                                                   &pPvt->ADImageInterruptPvt);
+    if (status != asynSuccess) {
+        printf("%s: Can't register asynADImage interrupt\n", functionName);
+        return(asynError);
+    }
+
     /* Create the epicsMutex for locking access to data structures from other threads */
-    pCamera->mutexId = epicsMutexCreate();
-    if (!pCamera->mutexId) {
-        printf("%s:PSConnect: epicsMutexCreate failure\n", driverName);
-        return AREA_DETECTOR_ERROR;
+    pPvt->mutexId = epicsMutexCreate();
+    if (!pPvt->mutexId) {
+        printf("%s: epicsMutexCreate failure\n", functionName);
+        return asynError;
     }
     
-    /* Set the local log function, may be changed by higher layers */
-    ADSetLog(pCamera, PSLogMsg, NULL);
-
-    /* Initialize the Prosilica PvAPI library */
+   /* Initialize the Prosilica PvAPI library */
     status = PvInitialize();
     if (status) {
-        printf("%s:PSConnect: PvInitialize failed for camera %d\n", driverName, camera);
-        return AREA_DETECTOR_ERROR;
+        printf("%s:PSConnect: PvInitialize failed for camera %d\n", 
+        driverName, uniqueId);
+        return asynError;
     }
     
     /* Initialize the parameter library */
-    pCamera->params = ADParam->create(0, ADLastDriverParam);
-    if (!pCamera->params) {
-        printf("%s:PSConnect: unable to create parameter library\n", driverName);
-        return AREA_DETECTOR_ERROR;
+    pPvt->params = ADParam->create(0, ADLastDriverParam, &pPvt->asynInterfaces);
+    if (!pPvt->params) {
+        printf("%s: unable to create parameter library\n", functionName);
+        return asynError;
     }
     
     /* Use the utility library to set some defaults */
-    status = ADUtils->setParamDefaults(pCamera->params);
+    status = ADUtils->setParamDefaults(pPvt->params);
     
-    pCamera->ipAddr = epicsStrDup(ipAddr);
-    
+    /* Create the thread that updates the frame rate */
+    status = (epicsThreadCreate("PSRateTask",
+                                epicsThreadPriorityLow,
+                                epicsThreadGetStackSize(epicsThreadStackMedium),
+                                (EPICSTHREADFUNC)PSRateTask,
+                                pPvt) == NULL);
+    if (status) {
+        printf("%s: epicsThreadCreate failure for rate task\n", functionName);
+        return asynError;
+    }
+
     /* Try to connect to the camera.  
      * It is not a fatal error if we cannot now, the camera may be off or owned by
      * someone else.  It may connect later. */
-    status = PSConnect(pCamera);
+    status = PSConnect(pPvt);
     if (status) {
         printf("%s:PSConnect: cannot connect to camera %d, manually connect when available.\n", 
-               driverName, camera);
-        return AREA_DETECTOR_ERROR;
+               driverName, uniqueId);
+        return asynError;
     }
     
-    return AREA_DETECTOR_OK;
+    return asynSuccess;
 }
 
