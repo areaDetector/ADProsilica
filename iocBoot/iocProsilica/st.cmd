@@ -3,12 +3,12 @@ errlogInit(20000)
 
 dbLoadDatabase("$(AD)/dbd/prosilicaApp.dbd")
 prosilicaApp_registerRecordDeviceDriver(pdbbase) 
+prosilicaConfig("PS1", 50022)
 dbLoadRecords("$(AD)/ADApp/Db/ADBase.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
-dbLoadRecords("$(AD)/ADApp/Db/ADImage.template","P=13PS1:,D=cam1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,SIZE=8,FTVL=UCHAR,NPIXELS=1392640")
 dbLoadRecords("$(AD)/ADApp/Db/prosilica.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
 
-prosilicaConfig("PS1", 50022)
-drvADImageConfigure("PS1Image", "PS1")
+drvADImageConfigure("PS1Image", 5, "PS1", 0)
+dbLoadRecords("$(AD)/ADApp/Db/ADImage.template","P=13PS1:,I=image1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,SIZE=8,FTVL=UCHAR,NPIXELS=1392640")
 
 #asynSetTraceMask("PS1",0,255)
 
