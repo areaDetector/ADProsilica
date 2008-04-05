@@ -41,6 +41,59 @@ static char *driverName = "drvProsilica";
 
 #define MAX_FRAMES  2  /* Number of frame buffers for PvApi */
 
+/* If we have any private driver commands they begin with ADFirstDriverCommand and should end
+   with ADLastDriverCommand, which is used for setting the size of the parameter library table */
+typedef enum {
+    /* These parameters describe the trigger modes of the Prosilica
+     * They must agree with the values in the mbbo/mbbi records in
+     * the Prosilca database. */
+    PSTriggerStartFreeRun,
+    PSTriggerStartSyncIn1,
+    PSTriggerStartSyncIn2,
+    PSTriggerStartSyncIn3,
+    PSTriggerStartSyncIn4,
+    PSTriggerStartFixedRate,
+    PSTriggerStartSoftware
+} PSTriggerStartMode_t;
+
+static char *PSTriggerStartStrings[] = {
+    "Freerun","SyncIn1","SyncIn2","SyncIn3","SyncIn4","FixedRate","Software"
+};
+ 
+#define NUM_START_TRIGGER_MODES (sizeof(PSTriggerStartStrings) / sizeof(PSTriggerStartStrings[0]))
+
+typedef enum {
+    /* These parameters are for the camera statistics */
+    PSReadStatistics = ADFirstDriverParam,
+    PSStatDriverType,
+    PSStatFilterVersion,
+    PSStatFrameRate,
+    PSStatFramesCompleted,
+    PSStatFramesDropped,
+    PSStatPacketsErroneous,
+    PSStatPacketsMissed,
+    PSStatPacketsReceived,
+    PSStatPacketsRequested,
+    PSStatPacketsResent,
+    ADLastDriverParam
+} PSDetParam_t;
+
+static ADParamString_t PSDetParamString[] = {
+    {PSReadStatistics,        "PS_READ_STATISTICS"},
+    {PSStatDriverType,        "PS_DRIVER_TYPE"},
+    {PSStatFilterVersion,     "PS_FILTER_VERSION"},
+    {PSStatFrameRate,         "PS_FRAME_RATE"},
+    {PSStatFramesCompleted,   "PS_FRAMES_COMPLETED"},
+    {PSStatFramesDropped,     "PS_FRAMES_DROPPED"},
+    {PSStatPacketsErroneous,  "PS_PACKETS_ERRONEOUS"},
+    {PSStatPacketsMissed,     "PS_PACKETS_MISSED"},
+    {PSStatPacketsReceived,   "PS_PACKETS_RECEIVED"},
+    {PSStatPacketsRequested,  "PS_PACKETS_REQUESTED"},
+    {PSStatPacketsResent,     "PS_PACKETS_RESENT"}
+};
+
+#define NUM_PS_DET_PARAMS (sizeof(PSDetParamString)/sizeof(PSDetParamString[0]))
+
 typedef struct ADHandle {
     /* The first set of items in this structure will be needed by all drivers */
     char *portName;
@@ -107,6 +160,7 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
     int status = asynSuccess;
     ADDataType_t dataType;
     int autoSave;
+    int frameCounter;
     drvADPvt *pPvt = (drvADPvt *) pFrame->Context[0];
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
@@ -133,7 +187,7 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
             dataType = ADUInt32;
             break;
     }
-    ADUtils->ADImageCallback(pPvt->params, pPvt->ADImageInterruptPvt, 
+    ADUtils->ADImageCallback(pPvt->ADImageInterruptPvt, 
                              (void *)pFrame->ImageBuffer,
                              dataType, pFrame->Width, pFrame->Height);
 
@@ -146,7 +200,12 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
         ADParam->setInteger(pPvt->params, ADAcquire, 0);
         ADParam->setInteger(pPvt->params, ADStatus, ADStatusIdle);
      }
-    
+   
+    /* Update the frame counter */
+    ADParam->getInteger(pPvt->params, ADFrameCounter, &frameCounter);
+    frameCounter++;
+    ADParam->setInteger(pPvt->params, ADFrameCounter, frameCounter);
+
     /* If autoSave is set then save the image */
     status = ADParam->getInteger(pPvt->params, ADAutoSave, &autoSave);
     if (autoSave) status = PSWriteFile(pPvt);
@@ -450,43 +509,6 @@ static int PSConnect(drvADPvt *pPvt)
     return(status);
 }
 
-static void PSRateTask(drvADPvt *pPvt)
-{
-    /* This thread just computes the average frame rate */
-    int frameCounter, prevFrameCounter;
-    double rate, frameRateTime, deltaTime;
-    epicsTimeStamp tNow, tPrevious;
-    
-    epicsMutexLock(pPvt->mutexId);
-    ADParam->getInteger(pPvt->params, ADFrameCounter, &prevFrameCounter);
-    epicsTimeGetCurrent(&tPrevious);
-    /* Get the time we need to sleep before the next frame rate computation */
-    ADParam->getDouble(pPvt->params, ADFrameRateTime, &frameRateTime);
-    epicsMutexUnlock(pPvt->mutexId);
-    
-    /* Loop forever */
-    while (1) {
-        /* Sleep for the frameRateTime */
-        epicsThreadSleep(frameRateTime);
-        epicsMutexLock(pPvt->mutexId);
-        
-        /* Measure exactly how long since the last update */
-        epicsTimeGetCurrent(&tNow);
-        deltaTime = epicsTimeDiffInSeconds(&tNow, &tPrevious);
-        
-        /* Compute the rate */
-        ADParam->getInteger(pPvt->params, ADFrameCounter, &frameCounter);
-        rate = (frameCounter - prevFrameCounter) / deltaTime;
-        ADParam->setDouble(pPvt->params, ADFrameRate, rate);
-        
-        /* Store the new values */
-        prevFrameCounter = frameCounter;
-        memcpy(&tPrevious, &tNow, sizeof(tNow));
-        ADParam->callCallbacks(pPvt->params);
-        epicsMutexUnlock(pPvt->mutexId);
-    }
-}
-
 
 /* asynInt32 interface functions */
 static asynStatus readInt32(void *drvPvt, asynUser *pasynUser, 
@@ -519,7 +541,6 @@ static asynStatus writeInt32(void *drvPvt, asynUser *pasynUser,
     drvADPvt *pPvt = (drvADPvt *)drvPvt;
     int function = pasynUser->reason;
     asynStatus status = asynSuccess;
-    tPvInt32 intVal;
     int reset=0;
 
     epicsMutexLock(pPvt->mutexId);
@@ -540,7 +561,7 @@ static asynStatus writeInt32(void *drvPvt, asynUser *pasynUser,
             status |= PSSetGeometry(pPvt);
             break;
         case ADNumFrames:
-            status |= PvAttrUint32Set(pPvt->PvHandle, "AcquisitionFrameCount", intVal);
+            status |= PvAttrUint32Set(pPvt->PvHandle, "AcquisitionFrameCount", value);
             break;
         case ADFrameMode:
             switch(value) {
@@ -919,6 +940,11 @@ static asynStatus disconnect(void *drvPvt, asynUser *pasynUser)
 static void report(void *drvPvt, FILE *fp, int details)
 {
     drvADPvt *pPvt = (drvADPvt *)drvPvt;
+    tPvCameraInfo cameraInfo[20]; 
+    int i;
+    unsigned long numReturned, numTotal;
+    
+    numReturned = PvCameraList(cameraInfo, 20, &numTotal);
 
     fprintf(fp, "Prosilica camera %s Unique ID=%d\n", 
             pPvt->portName, pPvt->uniqueId);
@@ -931,6 +957,11 @@ static void report(void *drvPvt, FILE *fp, int details)
         fprintf(fp, "  Sensor width:      %d\n",  pPvt->sensorWidth);
         fprintf(fp, "  Sensor height:     %d\n",  pPvt->sensorHeight);
         fprintf(fp, "  Frame buffer size: %d\n",  pPvt->frame[0].ImageBufferSize);
+        fprintf(fp, "\n");
+        fprintf(fp, "List of all Prosilica cameras found, (total=%d):\n", numReturned);
+        for (i=0; i<numReturned; i++) {
+            fprintf(fp, "    ID: %d\n", cameraInfo[i].UniqueId);
+        }
     }
     if (details > 5) {
         fprintf(fp, "\nParameter library contents:\n");
@@ -1055,6 +1086,9 @@ int prosilicaConfig(char *portName, /* Port name */
         return asynError;
     }
     
+    /* It appears to be necessary to wait a little for the PvAPI library to find the cameras */
+    epicsThreadSleep(0.2);
+    
     /* Initialize the parameter library */
     pPvt->params = ADParam->create(0, ADLastDriverParam, &pPvt->asynInterfaces);
     if (!pPvt->params) {
@@ -1065,17 +1099,6 @@ int prosilicaConfig(char *portName, /* Port name */
     /* Use the utility library to set some defaults */
     status = ADUtils->setParamDefaults(pPvt->params);
     
-    /* Create the thread that updates the frame rate */
-    status = (epicsThreadCreate("PSRateTask",
-                                epicsThreadPriorityLow,
-                                epicsThreadGetStackSize(epicsThreadStackMedium),
-                                (EPICSTHREADFUNC)PSRateTask,
-                                pPvt) == NULL);
-    if (status) {
-        printf("%s: epicsThreadCreate failure for rate task\n", functionName);
-        return asynError;
-    }
-
     /* Try to connect to the camera.  
      * It is not a fatal error if we cannot now, the camera may be off or owned by
      * someone else.  It may connect later. */
