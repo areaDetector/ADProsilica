@@ -1,1 +1,3 @@
-file "ADAsyn_settings.req", P=$(P), D=$(D)
+file "ADBase_settings.req",  P=$(P),  D=cam1:
+file "ADImage_settings.req", P=$(P),  I=image1:
+file "ADFile_settings.req",  P=$(P),  F=file1:
