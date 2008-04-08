@@ -3,12 +3,21 @@ errlogInit(20000)
 
 dbLoadDatabase("$(AD)/dbd/prosilicaApp.dbd")
 prosilicaApp_registerRecordDeviceDriver(pdbbase) 
+
+# Initialize the buffer library
+ADImageBuffInit(50, 100000000)
+
 prosilicaConfig("PS1", 50022)
 dbLoadRecords("$(AD)/ADApp/Db/ADBase.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
 dbLoadRecords("$(AD)/ADApp/Db/prosilica.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
 
-drvADImageConfigure("PS1Image", 5, "PS1", 0)
+# Create an image plugin, set it to get data from first simDetector driver.
+drvADImageConfigure("PS1Image", 5, 0, "PS1", 0)
 dbLoadRecords("$(AD)/ADApp/Db/ADImage.template","P=13PS1:,I=image1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,SIZE=8,FTVL=UCHAR,NPIXELS=1392640")
+
+# Create a file saving plugin
+drvADFileConfigure("PS1File", 10, 0, "PS1", 0)
+dbLoadRecords("$(AD)/ADApp/Db/ADFile.template","P=13PS1:,F=file1:,PORT=PS1File,ADDR=0,TIMEOUT=1")
 
 #asynSetTraceMask("PS1",0,255)
 
