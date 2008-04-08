@@ -32,9 +32,11 @@
 /* Defining this will create the static table of standard parameters in ADInterface.h */
 #define DEFINE_STANDARD_PARAM_STRINGS 1
 #include "ADParamLib.h"
-#include "ADInterface.h"
 #include "ADUtils.h"
+#include "ADInterface.h"
 #include "asynADImage.h"
+#include "ADImageBuff.h"
+
 #include "drvProsilica.h"
 
 static char *driverName = "drvProsilica";
@@ -94,23 +96,27 @@ static ADParamString_t PSDetParamString[] = {
 
 #define NUM_PS_DET_PARAMS (sizeof(PSDetParamString)/sizeof(PSDetParamString[0]))
 
-typedef struct ADHandle {
+typedef struct drvADPvt {
     /* The first set of items in this structure will be needed by all drivers */
     char *portName;
     epicsMutexId mutexId;              /* A mutex to lock access to data structures. */
     PARAMS params;
-    /* asyn interfaces */
+
+    /* The asyn interfaces this driver implements */
     asynStandardInterfaces asynInterfaces;
     asynInterface asynADImage;
     void *ADImageInterruptPvt;
+
+    /* asynUser connected to ourselves for asynTrace */
     asynUser *pasynUser;
 
-    /* These items are specific to the Prosilica API */
+    /* These items are specific to the Prosilica driver */
     tPvHandle PvHandle;                /* Handle for the Prosilica PvAPI library */
     int uniqueId;
     tPvCameraInfo PvCameraInfo;
-    tPvFrame frame[MAX_FRAMES];        /* Frame buffers. */
-    tPvFrame *lastFrame;
+    tPvFrame PvFrames[MAX_FRAMES];
+    size_t maxFrameSize;
+    ADImage_t *pImage;
     int framesRemaining;
     char sensorType[20];
     char IPAddress[50];
@@ -122,14 +128,14 @@ typedef struct ADHandle {
 
 static int PSWriteFile(drvADPvt *pPvt)
 {
-    /* Writes last frame to disk as a TIFF file. */
+    /* Writes last image to disk as a TIFF file. */
     int status = asynSuccess, tiffStatus;
     char fullFileName[MAX_FILENAME_LEN];
     int fileFormat;
-    int oldSize, actualSize;
-    tPvFrame *pFrame = pPvt->lastFrame;
+    tPvFrame PvFrame, *pFrame=&PvFrame;
 
-    if (pFrame == NULL) return asynError;
+    if (!pPvt->pImage) return asynError;
+    
 
     status |= ADUtils->createFileName(pPvt->params, MAX_FILENAME_LEN, fullFileName);
     if (status) { 
@@ -139,29 +145,43 @@ static int PSWriteFile(drvADPvt *pPvt)
         return(status);
     }
     
-    /* There is a bug in ImageWriteTiff, it crashes if the ImageBufferSize is not the actual image size.
-     * Temporarily replace the actual buffer size with the size of the current frame. */
-    status |= PvAttrUint32Get(pPvt->PvHandle, "TotalBytesPerFrame", &actualSize);
-    oldSize = pFrame->ImageBufferSize;
-    pFrame->ImageBufferSize = actualSize;
+    /* Copy the data from our last image buffer to a frame buffer structure, which is
+     * required by ImageWriteTiff */
+    pFrame->Width = pPvt->pImage->nx;
+    pFrame->Height = pPvt->pImage->ny;
+    pFrame->ImageBuffer = pPvt->pImage->pData;
+    /* Note, this needs work because we need to support color models */
+    switch(pPvt->pImage->dataType) {
+        case ADUInt8:
+            pFrame->Format = ePvFmtMono8;
+            break;
+        case ADUInt16:
+            pFrame->Format = ePvFmtMono16;
+    }
+    
+    /* There is a bug in ImageWriteTiff, it crashes if the ImageBufferSize is 
+     * not the actual image size. */
+    status |= PvAttrUint32Get(pPvt->PvHandle, "TotalBytesPerFrame", &pFrame->ImageSize);
     
     status |= ADParam->getInteger(pPvt->params, ADFileFormat, &fileFormat);
     /* We only support writing in TIFF format for now */
     tiffStatus = ImageWriteTiff(fullFileName, pFrame);
-    /* Restore size */
-    pFrame->ImageBufferSize = oldSize;
-    if (tiffStatus != 1) status |= asynError;
-    status |= ADParam->setString(pPvt->params, ADFullFileName, fullFileName);
+    if (tiffStatus != 1) {
+        status |= asynError;
+    } else {
+        status |= ADParam->setString(pPvt->params, ADFullFileName, fullFileName);
+    }
     return(status);
 }
 
 static void PVDECL PSFrameCallback(tPvFrame *pFrame)
 {
+    drvADPvt *pPvt = (drvADPvt *) pFrame->Context[0];
     int status = asynSuccess;
     ADDataType_t dataType;
     int autoSave;
-    int frameCounter;
-    drvADPvt *pPvt = (drvADPvt *) pFrame->Context[0];
+    int imageCounter;
+    ADImage_t *pImage;
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
      * we will not be able to take the mutex and things will hang.  Prevent this by looking at the frame
@@ -171,7 +191,15 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
 
     epicsMutexLock(pPvt->mutexId);
     
-    /* Call the callback function for image data */
+    /* We save the most recent image buffer so it can be used in the PSWriteFile
+     * and readADImage functions.  Now release it. */
+    if (pPvt->pImage) ADImageBuff->release(pPvt->pImage);
+    
+    /* The frame we just received has ADImage_t* in Context[1] */ 
+    pPvt->pImage = (ADImage_t *)pFrame->Context[1];
+    /* Set the properties of the image to those of the current frame */
+    pPvt->pImage->nx = pFrame->Width;
+    pPvt->pImage->ny = pFrame->Height;
     /* Convert from the PvApi data types to ADDataType */
     switch(pFrame->Format) {
         case ePvFmtMono8:
@@ -187,24 +215,21 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
             dataType = ADUInt32;
             break;
     }
-    ADUtils->ADImageCallback(pPvt->ADImageInterruptPvt, 
-                             (void *)pFrame->ImageBuffer,
-                             dataType, pFrame->Width, pFrame->Height);
-
-    /* Set pointer that ADGetImage uses */
-    pPvt->lastFrame = pFrame;
+    pPvt->pImage->dataType = dataType;
+    
+    ADUtils->ADImageCallback(pPvt->ADImageInterruptPvt, pPvt->pImage);
     
     /* See if acquisition is done */
     if (pPvt->framesRemaining > 0) pPvt->framesRemaining--;
     if (pPvt->framesRemaining == 0) {
         ADParam->setInteger(pPvt->params, ADAcquire, 0);
         ADParam->setInteger(pPvt->params, ADStatus, ADStatusIdle);
-     }
+    }
    
     /* Update the frame counter */
-    ADParam->getInteger(pPvt->params, ADFrameCounter, &frameCounter);
-    frameCounter++;
-    ADParam->setInteger(pPvt->params, ADFrameCounter, frameCounter);
+    ADParam->getInteger(pPvt->params, ADImageCounter, &imageCounter);
+    imageCounter++;
+    ADParam->setInteger(pPvt->params, ADImageCounter, imageCounter);
 
     /* If autoSave is set then save the image */
     status = ADParam->getInteger(pPvt->params, ADAutoSave, &autoSave);
@@ -213,6 +238,15 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
     /* Update any changed parameters */
     ADParam->callCallbacks(pPvt->params);
     
+    /* Allocate a new image buffer, make the size be the maximum that the frames can be */
+    pImage = ADImageBuff->alloc(1, 1, ADInt8, pPvt->maxFrameSize, NULL);
+    
+    /* Put the pointer to this image buffer in the frame context[1] */
+    pFrame->Context[1] = pImage;
+    
+    /* Reset the frame buffer data pointer be this image buffer data pointer */
+    pFrame->ImageBuffer = pImage->pData;
+
     /* Queue this frame to run again */
     status = PvCaptureQueueFrame(pPvt->PvHandle, pFrame, PSFrameCallback); 
     epicsMutexUnlock(pPvt->mutexId);
@@ -325,15 +359,15 @@ static PSReadParameters(drvADPvt *pPvt)
     status |= PSGetGeometry(pPvt);
 
     status |= PvAttrUint32Get(pPvt->PvHandle, "AcquisitionFrameCount", &intVal);
-    status |= ADParam->setInteger(pPvt->params, ADNumFrames, intVal);
+    status |= ADParam->setInteger(pPvt->params, ADNumImages, intVal);
 
     status |= PvAttrEnumGet(pPvt->PvHandle, "AcquisitionMode", buffer, sizeof(buffer), &nchars);
-    if      (!strcmp(buffer, "SingleFrame")) intVal = ADFrameSingle;
-    else if (!strcmp(buffer, "MultiFrame"))  intVal = ADFrameMultiple;
-    else if (!strcmp(buffer, "Recorder"))    intVal = ADFrameMultiple;
-    else if (!strcmp(buffer, "Continuous"))  intVal = ADFrameContinuous;
+    if      (!strcmp(buffer, "SingleFrame")) intVal = ADImageSingle;
+    else if (!strcmp(buffer, "MultiFrame"))  intVal = ADImageMultiple;
+    else if (!strcmp(buffer, "Recorder"))    intVal = ADImageMultiple;
+    else if (!strcmp(buffer, "Continuous"))  intVal = ADImageContinuous;
     else {intVal=0; status |= asynError;}
-    status |= ADParam->setInteger(pPvt->params, ADFrameMode, intVal);
+    status |= ADParam->setInteger(pPvt->params, ADImageMode, intVal);
 
     status |= PvAttrEnumGet(pPvt->PvHandle, "FrameStartTriggerMode", buffer, sizeof(buffer), &nchars);
     for (intVal=0; intVal<NUM_START_TRIGGER_MODES; intVal++) {
@@ -377,7 +411,10 @@ static PSReadParameters(drvADPvt *pPvt)
 static int PSDisconnect(drvADPvt *pPvt)
 {
     int status = asynSuccess;
+    tPvFrame *pFrame;
+    ADImage_t *pImage;
 
+    if (!pPvt->PvHandle) return(asynSuccess);
     status |= PvCaptureQueueClear(pPvt->PvHandle);
     status |= PvCaptureEnd(pPvt->PvHandle);
     status |= PvCameraClose(pPvt->PvHandle);
@@ -388,8 +425,17 @@ static int PSDisconnect(drvADPvt *pPvt)
         asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
               "%s:PSDisonnect: unable to close camera %d\n",
               driverName, pPvt->uniqueId);
-        return asynError;
     }
+    /* If we have allocated frame buffers, free them. */
+    /* Must first free any image buffers they point to */
+    pFrame = pPvt->PvFrames;
+    while (pFrame) {
+        pImage = pFrame->Context[1];
+        if (pImage) ADImageBuff->release(pImage);
+        pFrame->Context[1] = 0;
+        pFrame++;
+    }
+    pPvt->PvHandle = NULL;
     return(status);
 }
 
@@ -399,9 +445,13 @@ static int PSConnect(drvADPvt *pPvt)
     int nchars;
     tPvFrame *pFrame;
     int i;
-    size_t maxBytes;
     int bytesPerPixel;
+    ADImage_t *pImage;
 
+    /* First disconnect from the camera */
+printf("PSConnect, calling PSDisconnect\n");
+    PSDisconnect(pPvt);
+    
     status = PvCameraInfo(pPvt->uniqueId, &pPvt->PvCameraInfo);
     if (status) {
         asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
@@ -417,6 +467,7 @@ static int PSConnect(drvADPvt *pPvt)
         return asynError;
     }
 
+printf("PSConnect, calling PvCameraOpen\n");
     status = PvCameraOpen(pPvt->uniqueId, ePvAccessMaster, &pPvt->PvHandle);
     if (status) {
         asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
@@ -456,23 +507,24 @@ static int PSConnect(drvADPvt *pPvt)
     bytesPerPixel = (pPvt->sensorBits-1)/8 + 1;
     /* If the camera supports color then there can be 4 values per pixel? */
     if (strcmp(pPvt->sensorType, "Mono") != 0) bytesPerPixel *= 4;
-    maxBytes = pPvt->sensorWidth * pPvt->sensorHeight * bytesPerPixel;    
+    pPvt->maxFrameSize = pPvt->sensorWidth * pPvt->sensorHeight * bytesPerPixel;    
+printf("PSConnect, allocating frames\n");
     for (i=0; i<MAX_FRAMES; i++) {
-        pFrame = &pPvt->frame[i];
-        free(pFrame->ImageBuffer);
-        pFrame->ImageBuffer = malloc(maxBytes);
-        free(pFrame->AncillaryBuffer);
-        /* We are not using AncillaryBuffer, but maybe ImageWriteTiff needs it? */
-        pFrame->AncillaryBuffer = malloc(1000);
-        pFrame->AncillaryBufferSize = 1000;
-        if (!pFrame->ImageBuffer) {
+        pFrame = &pPvt->PvFrames[i];
+       /* Allocate a new image buffer, make the size be the maximum that the frames can be */
+        pImage = ADImageBuff->alloc(1, 1, ADInt8, pPvt->maxFrameSize, NULL);
+        if (!pImage) {
             asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
-                  "%s:PSConnect: unable to allocate ImageBuffer frame %d on camera %d\n",
+                  "%s:PSConnect: unable to allocate image %d on camera %d\n",
                   driverName, i, pPvt->uniqueId);
             return asynError;
         }
-        pFrame->ImageBufferSize = maxBytes;
+        /* Set the frame buffer data pointer be this image buffer data pointer */
+        pFrame->ImageBufferSize = pPvt->maxFrameSize;
+        /* Put a pointer to ourselves in Context[0] */
         pFrame->Context[0] = (void *)pPvt;
+        /* Put the pointer to this image buffer in the frame context[1] */
+        pFrame->Context[1] = pImage;
         status = PvCaptureQueueFrame(pPvt->PvHandle, pFrame, PSFrameCallback); 
         if (status) {
             asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
@@ -560,39 +612,39 @@ static asynStatus writeInt32(void *drvPvt, asynUser *pasynUser,
              * correct order */
             status |= PSSetGeometry(pPvt);
             break;
-        case ADNumFrames:
+        case ADNumImages:
             status |= PvAttrUint32Set(pPvt->PvHandle, "AcquisitionFrameCount", value);
             break;
-        case ADFrameMode:
+        case ADImageMode:
             switch(value) {
-            case ADFrameSingle:
+            case ADImageSingle:
                 status |= PvAttrEnumSet(pPvt->PvHandle, "AcquisitionMode", "SingleFrame");
                 break;
-            case ADFrameMultiple:
+            case ADImageMultiple:
                 status |= PvAttrEnumSet(pPvt->PvHandle, "AcquisitionMode", "MultiFrame");
                 break;
-            case ADFrameContinuous:
+            case ADImageContinuous:
                 status |= PvAttrEnumSet(pPvt->PvHandle, "AcquisitionMode", "Continuous");
                 break;
             }
             break;
         case ADAcquire:
             if (value) {
-                /* We need to set the number of frames we expect to collect, so the frame callback function
+                /* We need to set the number of images we expect to collect, so the frame callback function
                    can know when acquisition is complete.  We need to find out what mode we are in and how
                    many frames have been requested.  If we are in continuous mode then set the number of
                    remaining frames to -1. */
-                int frameMode, numFrames;
-                status |= ADParam->getInteger(pPvt->params, ADFrameMode, &frameMode);
-                status |= ADParam->getInteger(pPvt->params, ADNumFrames, &numFrames);
-                switch(frameMode) {
-                case ADFrameSingle:
+                int imageMode, numImages;
+                status |= ADParam->getInteger(pPvt->params, ADImageMode, &imageMode);
+                status |= ADParam->getInteger(pPvt->params, ADNumImages, &numImages);
+                switch(imageMode) {
+                case ADImageSingle:
                     pPvt->framesRemaining = 1;
                     break;
-                case ADFrameMultiple:
-                    pPvt->framesRemaining = numFrames;
+                case ADImageMultiple:
+                    pPvt->framesRemaining = numImages;
                     break;
-                case ADFrameContinuous:
+                case ADImageContinuous:
                     pPvt->framesRemaining = -1;
                     break;
                 }
@@ -793,56 +845,41 @@ static asynStatus writeOctet(void *drvPvt, asynUser *pasynUser,
 }
 
 /* asynADImage interface methods */
-static asynStatus readADImage(void *drvPvt, asynUser *pasynUser, void *data, int maxBytes,
-                       int *dataType, int *nx, int *ny)
+static asynStatus readADImage(void *drvPvt, asynUser *pasynUser, int maxBytes, ADImage_t *pImage)
 {
     drvADPvt *pPvt = (drvADPvt *)drvPvt;
-    tPvFrame *pFrame; 
-    int nCopy;
+    int imageSize, bytesPerPixel;
     int status = asynSuccess;
+    const char* functionName = "readADImage";
     
     epicsMutexLock(pPvt->mutexId);
-
-    if (pPvt->lastFrame == NULL) {
-       status = asynError;
+    if (!pPvt->pImage) {
+        asynPrint(pasynUser, ASYN_TRACE_ERROR, 
+              "%s:functionName error, no valid image available\n", 
+              driverName, functionName);
+        status = asynError;
     } else {
-        pFrame = pPvt->lastFrame;    
-        nCopy = pFrame->ImageSize;
-        if (nCopy > maxBytes) nCopy = maxBytes;
-        memcpy(data, pFrame->ImageBuffer, nCopy);
-
-        /* Convert from the PvApi data types to ADDataType */
-        switch(pFrame->Format) {
-            case ePvFmtMono8:
-            case ePvFmtBayer8:
-                *dataType = ADUInt8;
-                break;
-            case ePvFmtMono16:
-            case ePvFmtBayer16:
-                *dataType = ADUInt16;
-                break;
-            default:
-                /* Note, this is wrong it does not work for ePvFmtRgb48, which is 48 bits */
-                *dataType = ADUInt32;
-                break;
-        }
-        *nx = pFrame->Width;
-        *ny = pFrame->Height;
+        pImage->nx = pPvt->pImage->nx;
+        pImage->ny = pPvt->pImage->ny;
+        pImage->dataType = pPvt->pImage->dataType;
+        status |= ADUtils->bytesPerPixel(pImage->dataType, &bytesPerPixel);
+        imageSize = bytesPerPixel * pImage->nx * pImage->ny;
+        if (imageSize > maxBytes) imageSize = maxBytes;
+        memcpy(pImage->pData, pPvt->pImage->pData, imageSize);
     }
     if (status) 
         asynPrint(pasynUser, ASYN_TRACE_ERROR, 
-              "%s:readADImage error, status=%d maxBytes=%d, data=%p\n", 
-              driverName, status, maxBytes, data);
+              "%s:%s error, status=%d maxBytes=%d, data=%p\n", 
+              driverName, functionName, status, maxBytes, pImage->pData);
     else        
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
-              "%s:readADImage error, maxBytes=%d, data=%p\n", 
-              driverName, maxBytes, data);
+              "%s:%s error, maxBytes=%d, data=%p\n", 
+              driverName, functionName, maxBytes, pImage->pData);
     epicsMutexUnlock(pPvt->mutexId);
     return status;
 }
 
-static asynStatus writeADImage(void *drvPvt, asynUser *pasynUser, void *data,
-                        int dataType, int nx, int ny)
+static asynStatus writeADImage(void *drvPvt, asynUser *pasynUser, ADImage_t *pImage)
 {
     drvADPvt *pPvt = (drvADPvt *)drvPvt;
     int status = asynSuccess;
@@ -857,7 +894,6 @@ static asynStatus writeADImage(void *drvPvt, asynUser *pasynUser, void *data,
     epicsMutexUnlock(pPvt->mutexId);
     return status;
 }
-
 
 /* asynDrvUser routines */
 static asynStatus drvUserCreate(void *drvPvt, asynUser *pasynUser,
@@ -956,16 +992,17 @@ static void report(void *drvPvt, FILE *fp, int details)
         fprintf(fp, "  Sensor bits:       %d\n",  pPvt->sensorBits);
         fprintf(fp, "  Sensor width:      %d\n",  pPvt->sensorWidth);
         fprintf(fp, "  Sensor height:     %d\n",  pPvt->sensorHeight);
-        fprintf(fp, "  Frame buffer size: %d\n",  pPvt->frame[0].ImageBufferSize);
+        fprintf(fp, "  Frame buffer size: %d\n",  pPvt->PvFrames[0].ImageBufferSize);
         fprintf(fp, "\n");
         fprintf(fp, "List of all Prosilica cameras found, (total=%d):\n", numReturned);
-        for (i=0; i<numReturned; i++) {
+        for (i=0; i<(int)numReturned; i++) {
             fprintf(fp, "    ID: %d\n", cameraInfo[i].UniqueId);
         }
     }
     if (details > 5) {
         fprintf(fp, "\nParameter library contents:\n");
         ADParam->dump(pPvt->params);
+        ADImageBuff->report(details);
     }
 }
 
@@ -1098,7 +1135,7 @@ int prosilicaConfig(char *portName, /* Port name */
     
     /* Use the utility library to set some defaults */
     status = ADUtils->setParamDefaults(pPvt->params);
-    
+
     /* Try to connect to the camera.  
      * It is not a fatal error if we cannot now, the camera may be off or owned by
      * someone else.  It may connect later. */
