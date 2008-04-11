@@ -133,9 +133,12 @@ static int PSWriteFile(drvADPvt *pPvt)
     char fullFileName[MAX_FILENAME_LEN];
     int fileFormat;
     tPvFrame PvFrame, *pFrame=&PvFrame;
+    int bytesPerPixel;
 
     if (!pPvt->pImage) return asynError;
     
+    /* Set all fields in frame to 0 */
+    memset(pFrame, 0, sizeof(tPvFrame));
 
     status |= ADUtils->createFileName(pPvt->params, MAX_FILENAME_LEN, fullFileName);
     if (status) { 
@@ -150,18 +153,22 @@ static int PSWriteFile(drvADPvt *pPvt)
     pFrame->Width = pPvt->pImage->nx;
     pFrame->Height = pPvt->pImage->ny;
     pFrame->ImageBuffer = pPvt->pImage->pData;
+    ADUtils->bytesPerPixel(pPvt->pImage->dataType, &bytesPerPixel);
+    pFrame->ImageBufferSize = pFrame->Width * pFrame->Height * bytesPerPixel;
+    pFrame->ImageSize = pFrame->ImageBufferSize;
+    
     /* Note, this needs work because we need to support color models */
     switch(pPvt->pImage->dataType) {
+        case ADInt8:
         case ADUInt8:
             pFrame->Format = ePvFmtMono8;
+            pFrame->BitDepth = 8;
             break;
+        case ADInt16:
         case ADUInt16:
             pFrame->Format = ePvFmtMono16;
+            pFrame->BitDepth = 16;
     }
-    
-    /* There is a bug in ImageWriteTiff, it crashes if the ImageBufferSize is 
-     * not the actual image size. */
-    status |= PvAttrUint32Get(pPvt->PvHandle, "TotalBytesPerFrame", &pFrame->ImageSize);
     
     status |= ADParam->getInteger(pPvt->params, ADFileFormat, &fileFormat);
     /* We only support writing in TIFF format for now */
@@ -449,7 +456,6 @@ static int PSConnect(drvADPvt *pPvt)
     ADImage_t *pImage;
 
     /* First disconnect from the camera */
-printf("PSConnect, calling PSDisconnect\n");
     PSDisconnect(pPvt);
     
     status = PvCameraInfo(pPvt->uniqueId, &pPvt->PvCameraInfo);
@@ -467,7 +473,6 @@ printf("PSConnect, calling PSDisconnect\n");
         return asynError;
     }
 
-printf("PSConnect, calling PvCameraOpen\n");
     status = PvCameraOpen(pPvt->uniqueId, ePvAccessMaster, &pPvt->PvHandle);
     if (status) {
         asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
@@ -508,7 +513,6 @@ printf("PSConnect, calling PvCameraOpen\n");
     /* If the camera supports color then there can be 4 values per pixel? */
     if (strcmp(pPvt->sensorType, "Mono") != 0) bytesPerPixel *= 4;
     pPvt->maxFrameSize = pPvt->sensorWidth * pPvt->sensorHeight * bytesPerPixel;    
-printf("PSConnect, allocating frames\n");
     for (i=0; i<MAX_FRAMES; i++) {
         pFrame = &pPvt->PvFrames[i];
        /* Allocate a new image buffer, make the size be the maximum that the frames can be */
