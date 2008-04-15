@@ -5,7 +5,7 @@ dbLoadDatabase("$(AD)/dbd/prosilicaApp.dbd")
 prosilicaApp_registerRecordDeviceDriver(pdbbase) 
 
 # Initialize the buffer library
-ADImageBuffInit(50, 100000000)
+NDArrayBuffInit(50, 100000000)
 
 prosilicaConfig("PS1", 50022)
 dbLoadRecords("$(AD)/ADApp/Db/ADBase.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
