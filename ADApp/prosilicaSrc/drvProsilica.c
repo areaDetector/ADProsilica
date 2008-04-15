@@ -34,8 +34,7 @@
 #include "ADParamLib.h"
 #include "ADUtils.h"
 #include "ADInterface.h"
-#include "asynADImage.h"
-#include "ADImageBuff.h"
+#include "NDArrayBuff.h"
 
 #include "drvProsilica.h"
 
@@ -103,9 +102,7 @@ typedef struct drvADPvt {
     PARAMS params;
 
     /* The asyn interfaces this driver implements */
-    asynStandardInterfaces asynInterfaces;
-    asynInterface asynADImage;
-    void *ADImageInterruptPvt;
+    asynStandardInterfaces asynStdInterfaces;
 
     /* asynUser connected to ourselves for asynTrace */
     asynUser *pasynUser;
@@ -116,7 +113,7 @@ typedef struct drvADPvt {
     tPvCameraInfo PvCameraInfo;
     tPvFrame PvFrames[MAX_FRAMES];
     size_t maxFrameSize;
-    ADImage_t *pImage;
+    NDArray_t *pImage;
     int framesRemaining;
     char sensorType[20];
     char IPAddress[50];
@@ -133,7 +130,7 @@ static int PSWriteFile(drvADPvt *pPvt)
     char fullFileName[MAX_FILENAME_LEN];
     int fileFormat;
     tPvFrame PvFrame, *pFrame=&PvFrame;
-    int bytesPerPixel;
+    NDArrayInfo_t arrayInfo;
 
     if (!pPvt->pImage) return asynError;
     
@@ -150,22 +147,22 @@ static int PSWriteFile(drvADPvt *pPvt)
     
     /* Copy the data from our last image buffer to a frame buffer structure, which is
      * required by ImageWriteTiff */
-    pFrame->Width = pPvt->pImage->nx;
-    pFrame->Height = pPvt->pImage->ny;
+    pFrame->Width = pPvt->pImage->dims[0].size;
+    pFrame->Height = pPvt->pImage->dims[1].size;
     pFrame->ImageBuffer = pPvt->pImage->pData;
-    ADUtils->bytesPerPixel(pPvt->pImage->dataType, &bytesPerPixel);
-    pFrame->ImageBufferSize = pFrame->Width * pFrame->Height * bytesPerPixel;
+    NDArrayBuff->getInfo(pPvt->pImage, &arrayInfo);
+    pFrame->ImageBufferSize = arrayInfo.totalBytes;
     pFrame->ImageSize = pFrame->ImageBufferSize;
     
     /* Note, this needs work because we need to support color models */
     switch(pPvt->pImage->dataType) {
-        case ADInt8:
-        case ADUInt8:
+        case NDInt8:
+        case NDUInt8:
             pFrame->Format = ePvFmtMono8;
             pFrame->BitDepth = 8;
             break;
-        case ADInt16:
-        case ADUInt16:
+        case NDInt16:
+        case NDUInt16:
             pFrame->Format = ePvFmtMono16;
             pFrame->BitDepth = 16;
     }
@@ -185,10 +182,11 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
 {
     drvADPvt *pPvt = (drvADPvt *) pFrame->Context[0];
     int status = asynSuccess;
-    ADDataType_t dataType;
+    NDDataType_t dataType;
     int autoSave;
+    int ndims, dims[2];
     int imageCounter;
-    ADImage_t *pImage;
+    NDArray_t *pImage;
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
      * we will not be able to take the mutex and things will hang.  Prevent this by looking at the frame
@@ -200,31 +198,31 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
     
     /* We save the most recent image buffer so it can be used in the PSWriteFile
      * and readADImage functions.  Now release it. */
-    if (pPvt->pImage) ADImageBuff->release(pPvt->pImage);
+    if (pPvt->pImage) NDArrayBuff->release(pPvt->pImage);
     
-    /* The frame we just received has ADImage_t* in Context[1] */ 
-    pPvt->pImage = (ADImage_t *)pFrame->Context[1];
+    /* The frame we just received has NDArray_t* in Context[1] */ 
+    pPvt->pImage = (NDArray_t *)pFrame->Context[1];
     /* Set the properties of the image to those of the current frame */
-    pPvt->pImage->nx = pFrame->Width;
-    pPvt->pImage->ny = pFrame->Height;
+    pPvt->pImage->dims[0].size = pFrame->Width;
+    pPvt->pImage->dims[1].size = pFrame->Height;
     /* Convert from the PvApi data types to ADDataType */
     switch(pFrame->Format) {
         case ePvFmtMono8:
         case ePvFmtBayer8:
-            dataType = ADUInt8;
+            dataType = NDUInt8;
             break;
         case ePvFmtMono16:
         case ePvFmtBayer16:
-            dataType = ADUInt16;
+            dataType = NDUInt16;
             break;
         default:
             /* Note, this is wrong it does not work for ePvFmtRgb48, which is 48 bits */
-            dataType = ADUInt32;
+            dataType = NDUInt32;
             break;
     }
     pPvt->pImage->dataType = dataType;
     
-    ADUtils->ADImageCallback(pPvt->ADImageInterruptPvt, pPvt->pImage);
+    ADUtils->handleCallback(pPvt->asynStdInterfaces.handleInterruptPvt, pPvt->pImage);
     
     /* See if acquisition is done */
     if (pPvt->framesRemaining > 0) pPvt->framesRemaining--;
@@ -246,7 +244,10 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
     ADParam->callCallbacks(pPvt->params);
     
     /* Allocate a new image buffer, make the size be the maximum that the frames can be */
-    pImage = ADImageBuff->alloc(1, 1, ADInt8, pPvt->maxFrameSize, NULL);
+    ndims = 2;
+    dims[0] = pPvt->sensorWidth;
+    dims[1] = pPvt->sensorHeight;
+    pImage = NDArrayBuff->alloc(ndims, dims, NDInt8, pPvt->maxFrameSize, NULL);
     
     /* Put the pointer to this image buffer in the frame context[1] */
     pFrame->Context[1] = pImage;
@@ -358,8 +359,8 @@ static PSReadParameters(drvADPvt *pPvt)
 
     intVal = -1;
     status |= PvAttrEnumGet(pPvt->PvHandle, "PixelFormat", buffer, sizeof(buffer), &nchars);
-    if (!strcmp(buffer, "Mono8")) intVal = ADUInt8;
-    else if (!strcmp(buffer, "Mono16")) intVal = ADUInt16;
+    if (!strcmp(buffer, "Mono8")) intVal = NDUInt8;
+    else if (!strcmp(buffer, "Mono16")) intVal = NDUInt16;
     /* We don't support color modes yet */
     status |= ADParam->setInteger(pPvt->params, ADDataType, intVal);
     
@@ -419,7 +420,7 @@ static int PSDisconnect(drvADPvt *pPvt)
 {
     int status = asynSuccess;
     tPvFrame *pFrame;
-    ADImage_t *pImage;
+    NDArray_t *pImage;
 
     if (!pPvt->PvHandle) return(asynSuccess);
     status |= PvCaptureQueueClear(pPvt->PvHandle);
@@ -438,7 +439,7 @@ static int PSDisconnect(drvADPvt *pPvt)
     pFrame = pPvt->PvFrames;
     while (pFrame) {
         pImage = pFrame->Context[1];
-        if (pImage) ADImageBuff->release(pImage);
+        if (pImage) NDArrayBuff->release(pImage);
         pFrame->Context[1] = 0;
         pFrame++;
     }
@@ -452,8 +453,9 @@ static int PSConnect(drvADPvt *pPvt)
     int nchars;
     tPvFrame *pFrame;
     int i;
+    int ndims, dims[2];
     int bytesPerPixel;
-    ADImage_t *pImage;
+    NDArray_t *pImage;
 
     /* First disconnect from the camera */
     PSDisconnect(pPvt);
@@ -515,8 +517,11 @@ static int PSConnect(drvADPvt *pPvt)
     pPvt->maxFrameSize = pPvt->sensorWidth * pPvt->sensorHeight * bytesPerPixel;    
     for (i=0; i<MAX_FRAMES; i++) {
         pFrame = &pPvt->PvFrames[i];
+        ndims = 2;
+        dims[0] = pPvt->sensorWidth;
+        dims[1] = pPvt->sensorHeight;
        /* Allocate a new image buffer, make the size be the maximum that the frames can be */
-        pImage = ADImageBuff->alloc(1, 1, ADInt8, pPvt->maxFrameSize, NULL);
+        pImage = NDArrayBuff->alloc(ndims, dims, NDInt8, pPvt->maxFrameSize, NULL);
         if (!pImage) {
             asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
                   "%s:PSConnect: unable to allocate image %d on camera %d\n",
@@ -598,6 +603,7 @@ static asynStatus writeInt32(void *drvPvt, asynUser *pasynUser,
     int function = pasynUser->reason;
     asynStatus status = asynSuccess;
     int reset=0;
+    const char *functionName = "writeInt32";
 
     epicsMutexLock(pPvt->mutexId);
 
@@ -675,19 +681,19 @@ static asynStatus writeInt32(void *drvPvt, asynUser *pasynUser,
             break;
         case ADDataType:
             switch (value) {
-                case ADInt8:
-                case ADUInt8:
+                case NDInt8:
+                case NDUInt8:
                     status |= PvAttrEnumSet(pPvt->PvHandle, "PixelFormat", "Mono8");
                     break;
-                case ADInt16:
-                case ADUInt16:
+                case NDInt16:
+                case NDUInt16:
                     status |= PvAttrEnumSet(pPvt->PvHandle, "PixelFormat", "Mono16");
                     break;
                 /* We don't support other formats yet */
                 default:
                     asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
-                        "%s:ADSetInteger error unsupported data type %d\n", 
-                        driverName, value);
+                        "%s:%s: error unsupported data type %d\n", 
+                        driverName, functionName, value);
                     status |= asynError;
                     break;
             }      
@@ -697,12 +703,12 @@ static asynStatus writeInt32(void *drvPvt, asynUser *pasynUser,
     status |= PSReadParameters(pPvt);    
     if (status) 
         asynPrint(pasynUser, ASYN_TRACE_ERROR, 
-              "%s:writeInt32 error, status=%d function=%d, value=%d\n", 
-              driverName, status, function, value);
+              "%s:%s: error, status=%d function=%d, value=%d\n", 
+              driverName, functionName, status, function, value);
     else        
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
-              "%s:writeInt32: function=%d, value=%d\n", 
-              driverName, function, value);
+              "%s:%s: function=%d, value=%d\n", 
+              driverName, functionName, function, value);
     epicsMutexUnlock(pPvt->mutexId);
     return status;
 }
@@ -848,11 +854,13 @@ static asynStatus writeOctet(void *drvPvt, asynUser *pasynUser,
     return status;
 }
 
-/* asynADImage interface methods */
-static asynStatus readADImage(void *drvPvt, asynUser *pasynUser, int maxBytes, ADImage_t *pImage)
+/* asynHandle interface methods */
+static asynStatus readADImage(void *drvPvt, asynUser *pasynUser, void *handle)
 {
     drvADPvt *pPvt = (drvADPvt *)drvPvt;
-    int imageSize, bytesPerPixel;
+    NDArray_t *pImage = handle;
+    NDArrayInfo_t arrayInfo;
+    int dataSize=0;
     int status = asynSuccess;
     const char* functionName = "readADImage";
     
@@ -863,27 +871,28 @@ static asynStatus readADImage(void *drvPvt, asynUser *pasynUser, int maxBytes, A
               driverName, functionName);
         status = asynError;
     } else {
-        pImage->nx = pPvt->pImage->nx;
-        pImage->ny = pPvt->pImage->ny;
+        pImage->ndims = pPvt->pImage->ndims;
+        memcpy(pImage->dims, pPvt->pImage->dims, sizeof(pImage->dims));
         pImage->dataType = pPvt->pImage->dataType;
-        status |= ADUtils->bytesPerPixel(pImage->dataType, &bytesPerPixel);
-        imageSize = bytesPerPixel * pImage->nx * pImage->ny;
-        if (imageSize > maxBytes) imageSize = maxBytes;
-        memcpy(pImage->pData, pPvt->pImage->pData, imageSize);
+        NDArrayBuff->getInfo(pPvt->pImage, &arrayInfo);
+        dataSize = arrayInfo.totalBytes;
+        if (dataSize > pImage->dataSize) dataSize = pImage->dataSize;
+        memcpy(pImage->pData, pPvt->pImage->pData, dataSize);
     }
     if (status) 
         asynPrint(pasynUser, ASYN_TRACE_ERROR, 
-              "%s:%s error, status=%d maxBytes=%d, data=%p\n", 
-              driverName, functionName, status, maxBytes, pImage->pData);
+              "%s:%s error, status=%d pData=%p\n", 
+              driverName, functionName, status, pImage->pData);
     else        
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
               "%s:%s error, maxBytes=%d, data=%p\n", 
-              driverName, functionName, maxBytes, pImage->pData);
+              driverName, functionName, dataSize, pImage->pData);
     epicsMutexUnlock(pPvt->mutexId);
     return status;
 }
 
-static asynStatus writeADImage(void *drvPvt, asynUser *pasynUser, ADImage_t *pImage)
+
+static asynStatus writeADImage(void *drvPvt, asynUser *pasynUser, NDArray_t *pImage)
 {
     drvADPvt *pPvt = (drvADPvt *)drvPvt;
     int status = asynSuccess;
@@ -1006,7 +1015,7 @@ static void report(void *drvPvt, FILE *fp, int details)
     if (details > 5) {
         fprintf(fp, "\nParameter library contents:\n");
         ADParam->dump(pPvt->params);
-        ADImageBuff->report(details);
+        NDArrayBuff->report(details);
     }
 }
 
@@ -1041,7 +1050,7 @@ static asynDrvUser ifaceDrvUser = {
     drvUserDestroy
 };
 
-static asynADImage ifaceADImage = {
+static asynHandle ifaceHandle = {
     writeADImage,
     readADImage
 };
@@ -1074,7 +1083,7 @@ int prosilicaConfig(char *portName, /* Port name */
     /* Create asynUser for debugging */
     pPvt->pasynUser = pasynManager->createAsynUser(0, 0);
 
-    pInterfaces = &pPvt->asynInterfaces;
+    pInterfaces = &pPvt->asynStdInterfaces;
     
     /* Initialize interface pointers */
     pInterfaces->common.pinterface        = (void *)&ifaceCommon;
@@ -1082,11 +1091,13 @@ int prosilicaConfig(char *portName, /* Port name */
     pInterfaces->octet.pinterface         = (void *)&ifaceOctet;
     pInterfaces->int32.pinterface         = (void *)&ifaceInt32;
     pInterfaces->float64.pinterface       = (void *)&ifaceFloat64;
+    pInterfaces->handle.pinterface        = (void *)&ifaceHandle;
 
     /* Define which interfaces can generate interrupts */
     pInterfaces->octetCanInterrupt        = 1;
     pInterfaces->int32CanInterrupt        = 1;
     pInterfaces->float64CanInterrupt      = 1;
+    pInterfaces->handleCanInterrupt       = 1;
 
     status = pasynStandardInterfacesBase->initialize(portName, pInterfaces,
                                                      pPvt->pasynUser, pPvt);
@@ -1096,22 +1107,6 @@ int prosilicaConfig(char *portName, /* Port name */
         return(asynError);
     }
     
-    /* Register the asynADImage interface */
-    pPvt->asynADImage.interfaceType = asynADImageType;
-    pPvt->asynADImage.pinterface = (void *)&ifaceADImage;
-    pPvt->asynADImage.drvPvt = pPvt;
-    status = pasynADImageBase->initialize(portName, &pPvt->asynADImage);
-    if (status != asynSuccess) {
-        printf("%s: Can't register asynADImage\n", functionName);
-        return(asynError);
-    }
-    status = pasynManager->registerInterruptSource(portName, &pPvt->asynADImage,
-                                                   &pPvt->ADImageInterruptPvt);
-    if (status != asynSuccess) {
-        printf("%s: Can't register asynADImage interrupt\n", functionName);
-        return(asynError);
-    }
-
     /* Create the epicsMutex for locking access to data structures from other threads */
     pPvt->mutexId = epicsMutexCreate();
     if (!pPvt->mutexId) {
@@ -1131,7 +1126,7 @@ int prosilicaConfig(char *portName, /* Port name */
     epicsThreadSleep(0.2);
     
     /* Initialize the parameter library */
-    pPvt->params = ADParam->create(0, ADLastDriverParam, &pPvt->asynInterfaces);
+    pPvt->params = ADParam->create(0, ADLastDriverParam, &pPvt->asynStdInterfaces);
     if (!pPvt->params) {
         printf("%s: unable to create parameter library\n", functionName);
         return asynError;
