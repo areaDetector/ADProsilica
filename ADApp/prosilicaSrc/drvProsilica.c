@@ -40,6 +40,8 @@
 
 static char *driverName = "drvProsilica";
 
+static int PvApiInitialized;
+
 #define MAX_FRAMES  2  /* Number of frame buffers for PvApi */
 
 /* If we have any private driver commands they begin with ADFirstDriverCommand and should end
@@ -187,6 +189,7 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
     int ndims, dims[2];
     int imageCounter;
     NDArray_t *pImage;
+    const char *functionName = "PSFrameCallback";
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
      * we will not be able to take the mutex and things will hang.  Prevent this by looking at the frame
@@ -195,6 +198,12 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
     if (pFrame->Status == ePvErrCancelled) return;
 
     epicsMutexLock(pPvt->mutexId);
+    
+    if (pFrame->Status != ePvErrSuccess) {
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+            "%s:%s: ERROR, frame has error code %d\n",
+            driverName, functionName, pFrame->Status);
+    }
     
     /* We save the most recent image buffer so it can be used in the PSWriteFile
      * and readADImage functions.  Now release it. */
@@ -1114,12 +1123,17 @@ int prosilicaConfig(char *portName, /* Port name */
         return asynError;
     }
     
-   /* Initialize the Prosilica PvAPI library */
-    status = PvInitialize();
-    if (status) {
-        printf("%s:PSConnect: PvInitialize failed for camera %d\n", 
-        driverName, uniqueId);
-        return asynError;
+   /* Initialize the Prosilica PvAPI library 
+    * We get an error if we call this twice, so we need a global flag to see if 
+    * it's already been done.*/
+    if (!PvApiInitialized) {
+        status = PvInitialize();
+        if (status) {
+            printf("%s:PSConnect: PvInitialize failed for camera %d, status=%d\n", 
+            driverName, uniqueId, status);
+            return asynError;
+        }
+        PvApiInitialized = 1;
     }
     
     /* It appears to be necessary to wait a little for the PvAPI library to find the cameras */
