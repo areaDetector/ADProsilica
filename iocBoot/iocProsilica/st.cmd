@@ -7,13 +7,17 @@ prosilicaApp_registerRecordDeviceDriver(pdbbase)
 # Initialize the buffer library
 NDArrayBuffInit(50, 100000000)
 
-prosilicaConfig("PS1", 50022)
+prosilicaConfig("PS1", 50110)
 dbLoadRecords("$(AD)/ADApp/Db/ADBase.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
 dbLoadRecords("$(AD)/ADApp/Db/prosilica.template","P=13PS1:,D=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
 
-# Create an image plugin, set it to get data from first simDetector driver.
-drvADImageConfigure("PS1Image", 5, 0, "PS1", 0)
-dbLoadRecords("$(AD)/ADApp/Db/ADImage.template","P=13PS1:,I=image1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,SIZE=8,FTVL=UCHAR,NPIXELS=1392640")
+prosilicaConfig("PS2", 50022)
+dbLoadRecords("$(AD)/ADApp/Db/ADBase.template","P=13PS1:,D=cam2:,PORT=PS2,ADDR=0,TIMEOUT=1")
+dbLoadRecords("$(AD)/ADApp/Db/prosilica.template","P=13PS1:,D=cam2:,PORT=PS2,ADDR=0,TIMEOUT=1")
+
+# Create a standard arrays plugin, set it to get data from first simDetector driver.
+drvNDStdArraysConfigure("PS1Image", 5, 0, "PS1", 0)
+dbLoadRecords("$(AD)/ADApp/Db/NDStdArrays.template","P=13PS1:,A=image1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,SIZE=8,FTVL=UCHAR,NELEMENTS=1392640")
 
 # Create a file saving plugin
 drvADFileConfigure("PS1File", 10, 0, "PS1", 0)
