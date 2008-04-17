@@ -43,6 +43,7 @@ static char *driverName = "drvProsilica";
 static int PvApiInitialized;
 
 #define MAX_FRAMES  2  /* Number of frame buffers for PvApi */
+#define MAX_PACKET_SIZE 8228
 
 /* If we have any private driver commands they begin with ADFirstDriverCommand and should end
    with ADLastDriverCommand, which is used for setting the size of the parameter library table */
@@ -78,6 +79,7 @@ typedef enum {
     PSStatPacketsReceived,
     PSStatPacketsRequested,
     PSStatPacketsResent,
+    PSBadFrameCounter,
     ADLastDriverParam
 } PSDetParam_t;
 
@@ -92,7 +94,8 @@ static ADParamString_t PSDetParamString[] = {
     {PSStatPacketsMissed,     "PS_PACKETS_MISSED"},
     {PSStatPacketsReceived,   "PS_PACKETS_RECEIVED"},
     {PSStatPacketsRequested,  "PS_PACKETS_REQUESTED"},
-    {PSStatPacketsResent,     "PS_PACKETS_RESENT"}
+    {PSStatPacketsResent,     "PS_PACKETS_RESENT"},
+    {PSBadFrameCounter,       "PS_BAD_FRAME_COUNTER"}
 };
 
 #define NUM_PS_DET_PARAMS (sizeof(PSDetParamString)/sizeof(PSDetParamString[0]))
@@ -122,6 +125,7 @@ typedef struct drvADPvt {
     int sensorBits;
     int sensorWidth;
     int sensorHeight;
+    int timeStampFrequency;
 } drvADPvt;
 
 
@@ -189,6 +193,7 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
     int ndims, dims[2];
     int imageCounter;
     NDArray_t *pImage;
+    int badFrameCounter;
     const char *functionName = "PSFrameCallback";
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
@@ -198,72 +203,84 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
     if (pFrame->Status == ePvErrCancelled) return;
 
     epicsMutexLock(pPvt->mutexId);
-    
-    if (pFrame->Status != ePvErrSuccess) {
-        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+
+    pImage = (NDArray_t *)pFrame->Context[1];
+
+    if (pFrame->Status == ePvErrSuccess) {
+        /* The frame we just received has NDArray_t* in Context[1] */ 
+        /* We save the most recent good image buffer so it can be used in the PSWriteFile
+         * and readADImage functions.  Now release it. */
+        if (pPvt->pImage) NDArrayBuff->release(pPvt->pImage);
+        pPvt->pImage = pImage;
+        /* Set the properties of the image to those of the current frame */
+        pImage->dims[0].size = pFrame->Width;
+        pImage->dims[1].size = pFrame->Height;
+        /* Convert from the PvApi data types to ADDataType */
+        switch(pFrame->Format) {
+            case ePvFmtMono8:
+            case ePvFmtBayer8:
+                dataType = NDUInt8;
+                break;
+            case ePvFmtMono16:
+            case ePvFmtBayer16:
+                dataType = NDUInt16;
+                break;
+            default:
+                /* Note, this is wrong it does not work for ePvFmtRgb48, which is 48 bits */
+                dataType = NDUInt32;
+                break;
+        }
+        pImage->dataType = dataType;
+        
+        /* Set the uniqueId and time stamp */
+        pImage->uniqueId = pFrame->FrameCount;
+        pImage->timeStamp = ((double)pFrame->TimestampLo + 
+                             (double)pFrame->TimestampHi*4294967296.)/pPvt->timeStampFrequency;
+        
+        ADUtils->handleCallback(pPvt->asynStdInterfaces.handleInterruptPvt, pImage);
+
+        /* See if acquisition is done */
+        if (pPvt->framesRemaining > 0) pPvt->framesRemaining--;
+        if (pPvt->framesRemaining == 0) {
+            ADParam->setInteger(pPvt->params, ADAcquire, 0);
+            ADParam->setInteger(pPvt->params, ADStatus, ADStatusIdle);
+        }
+
+        /* Update the frame counter */
+        ADParam->getInteger(pPvt->params, ADImageCounter, &imageCounter);
+        imageCounter++;
+        ADParam->setInteger(pPvt->params, ADImageCounter, imageCounter);
+
+        /* If autoSave is set then save the image */
+        status = ADParam->getInteger(pPvt->params, ADAutoSave, &autoSave);
+        if (autoSave) status = PSWriteFile(pPvt);
+
+        asynPrintIO(pPvt->pasynUser, ASYN_TRACEIO_DRIVER, 
+            pPvt->pImage->pData, pPvt->pImage->dataSize,
+            "%s:%s: frameId=%d, timeStamp=%f\n",
+            driverName, functionName, pImage->uniqueId, pImage->timeStamp);
+
+        /* Allocate a new image buffer, make the size be the maximum that the frames can be */
+        ndims = 2;
+        dims[0] = pPvt->sensorWidth;
+        dims[1] = pPvt->sensorHeight;
+        pImage = NDArrayBuff->alloc(ndims, dims, NDInt8, pPvt->maxFrameSize, NULL);
+        /* Put the pointer to this image buffer in the frame context[1] */
+        pFrame->Context[1] = pImage;
+        /* Reset the frame buffer data pointer be this image buffer data pointer */
+        pFrame->ImageBuffer = pImage->pData;
+    } else {
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_FLOW, 
             "%s:%s: ERROR, frame has error code %d\n",
             driverName, functionName, pFrame->Status);
+        ADParam->getInteger(pPvt->params, PSBadFrameCounter, &badFrameCounter);
+        badFrameCounter++;
+        ADParam->setInteger(pPvt->params, PSBadFrameCounter, badFrameCounter);
     }
-    
-    /* We save the most recent image buffer so it can be used in the PSWriteFile
-     * and readADImage functions.  Now release it. */
-    if (pPvt->pImage) NDArrayBuff->release(pPvt->pImage);
-    
-    /* The frame we just received has NDArray_t* in Context[1] */ 
-    pPvt->pImage = (NDArray_t *)pFrame->Context[1];
-    /* Set the properties of the image to those of the current frame */
-    pPvt->pImage->dims[0].size = pFrame->Width;
-    pPvt->pImage->dims[1].size = pFrame->Height;
-    /* Convert from the PvApi data types to ADDataType */
-    switch(pFrame->Format) {
-        case ePvFmtMono8:
-        case ePvFmtBayer8:
-            dataType = NDUInt8;
-            break;
-        case ePvFmtMono16:
-        case ePvFmtBayer16:
-            dataType = NDUInt16;
-            break;
-        default:
-            /* Note, this is wrong it does not work for ePvFmtRgb48, which is 48 bits */
-            dataType = NDUInt32;
-            break;
-    }
-    pPvt->pImage->dataType = dataType;
-    
-    ADUtils->handleCallback(pPvt->asynStdInterfaces.handleInterruptPvt, pPvt->pImage);
-    
-    /* See if acquisition is done */
-    if (pPvt->framesRemaining > 0) pPvt->framesRemaining--;
-    if (pPvt->framesRemaining == 0) {
-        ADParam->setInteger(pPvt->params, ADAcquire, 0);
-        ADParam->setInteger(pPvt->params, ADStatus, ADStatusIdle);
-    }
-   
-    /* Update the frame counter */
-    ADParam->getInteger(pPvt->params, ADImageCounter, &imageCounter);
-    imageCounter++;
-    ADParam->setInteger(pPvt->params, ADImageCounter, imageCounter);
-
-    /* If autoSave is set then save the image */
-    status = ADParam->getInteger(pPvt->params, ADAutoSave, &autoSave);
-    if (autoSave) status = PSWriteFile(pPvt);
 
     /* Update any changed parameters */
     ADParam->callCallbacks(pPvt->params);
     
-    /* Allocate a new image buffer, make the size be the maximum that the frames can be */
-    ndims = 2;
-    dims[0] = pPvt->sensorWidth;
-    dims[1] = pPvt->sensorHeight;
-    pImage = NDArrayBuff->alloc(ndims, dims, NDInt8, pPvt->maxFrameSize, NULL);
-    
-    /* Put the pointer to this image buffer in the frame context[1] */
-    pFrame->Context[1] = pImage;
-    
-    /* Reset the frame buffer data pointer be this image buffer data pointer */
-    pFrame->ImageBuffer = pImage->pData;
-
     /* Queue this frame to run again */
     status = PvCaptureQueueFrame(pPvt->PvHandle, pFrame, PSFrameCallback); 
     epicsMutexUnlock(pPvt->mutexId);
@@ -492,6 +509,15 @@ static int PSConnect(drvADPvt *pPvt)
        return asynError;
     }
     
+    /* Negotiate maximum frame size */
+    status = PvCaptureAdjustPacketSize(pPvt->PvHandle, MAX_PACKET_SIZE);
+    if (status) {
+        asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
+              "%s:PSConnect: unable to adjust packet size %d\n",
+              driverName, pPvt->uniqueId);
+       return asynError;
+    }
+    
     /* Initialize the frame buffers and queue them */
     status = PvCaptureStart(pPvt->PvHandle);
     if (status) {
@@ -511,6 +537,7 @@ static int PSConnect(drvADPvt *pPvt)
     status |= PvAttrUint32Get(pPvt->PvHandle, "SensorBits", &pPvt->sensorBits);
     status |= PvAttrUint32Get(pPvt->PvHandle, "SensorWidth", &pPvt->sensorWidth);
     status |= PvAttrUint32Get(pPvt->PvHandle, "SensorHeight", &pPvt->sensorHeight);
+    status |= PvAttrUint32Get(pPvt->PvHandle, "TimeStampFrequency", &pPvt->timeStampFrequency);
     status |= PvAttrStringGet(pPvt->PvHandle, "DeviceIPAddress", pPvt->IPAddress, 
                               sizeof(pPvt->IPAddress), &nchars);
     if (status) {
@@ -538,6 +565,7 @@ static int PSConnect(drvADPvt *pPvt)
             return asynError;
         }
         /* Set the frame buffer data pointer be this image buffer data pointer */
+        pFrame->ImageBuffer = pImage->pData;
         pFrame->ImageBufferSize = pPvt->maxFrameSize;
         /* Put a pointer to ourselves in Context[0] */
         pFrame->Context[0] = (void *)pPvt;
@@ -559,6 +587,7 @@ static int PSConnect(drvADPvt *pPvt)
     status |= ADParam->setInteger(pPvt->params, ADSizeY, pPvt->sensorHeight);
     status |= ADParam->setInteger(pPvt->params, ADMaxSizeX, pPvt->sensorWidth);
     status |= ADParam->setInteger(pPvt->params, ADMaxSizeY, pPvt->sensorHeight);
+    status |= ADParam->setInteger(pPvt->params, PSBadFrameCounter, 0);
     if (status) {
         asynPrint(pPvt->pasynUser, ASYN_TRACE_ERROR, 
               "%s:PSConnect: unable to set camera parameters on camera %d\n",
@@ -1008,6 +1037,7 @@ static void report(void *drvPvt, FILE *fp, int details)
             pPvt->portName, pPvt->uniqueId);
     if (details > 0) {
         fprintf(fp, "  ID:                %ul\n", pPvt->PvCameraInfo.UniqueId);
+        fprintf(fp, "  IP address:        %s\n",  pPvt->IPAddress);
         fprintf(fp, "  Serial number:     %s\n",  pPvt->PvCameraInfo.SerialString);
         fprintf(fp, "  Model:             %s\n",  pPvt->PvCameraInfo.DisplayName);
         fprintf(fp, "  Sensor type:       %s\n",  pPvt->sensorType);
@@ -1015,6 +1045,7 @@ static void report(void *drvPvt, FILE *fp, int details)
         fprintf(fp, "  Sensor width:      %d\n",  pPvt->sensorWidth);
         fprintf(fp, "  Sensor height:     %d\n",  pPvt->sensorHeight);
         fprintf(fp, "  Frame buffer size: %d\n",  pPvt->PvFrames[0].ImageBufferSize);
+        fprintf(fp, "  Time stamp freq:   %d\n",  pPvt->timeStampFrequency);
         fprintf(fp, "\n");
         fprintf(fp, "List of all Prosilica cameras found, (total=%d):\n", numReturned);
         for (i=0; i<(int)numReturned; i++) {
@@ -1116,7 +1147,14 @@ int prosilicaConfig(char *portName, /* Port name */
         return(asynError);
     }
     
-    /* Create the epicsMutex for locking access to data structures from other threads */
+    /* Connect to our device for asynTrace */
+    status = pasynManager->connectDevice(pPvt->pasynUser, portName, 0);
+    if (status != asynSuccess) {
+        printf("%s, connectDevice failed\n", functionName);
+        return -1;
+    }
+
+     /* Create the epicsMutex for locking access to data structures from other threads */
     pPvt->mutexId = epicsMutexCreate();
     if (!pPvt->mutexId) {
         printf("%s: epicsMutexCreate failure\n", functionName);
