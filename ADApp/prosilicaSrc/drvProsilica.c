@@ -910,7 +910,7 @@ static asynStatus readADImage(void *drvPvt, asynUser *pasynUser, void *handle)
     epicsMutexLock(pPvt->mutexId);
     if (!pPvt->pImage) {
         asynPrint(pasynUser, ASYN_TRACE_ERROR, 
-              "%s:functionName error, no valid image available\n", 
+              "%s:%s: error, no valid image available\n", 
               driverName, functionName);
         status = asynError;
     } else {
