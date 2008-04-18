@@ -237,7 +237,12 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
         pImage->timeStamp = ((double)pFrame->TimestampLo + 
                              (double)pFrame->TimestampHi*4294967296.)/pPvt->timeStampFrequency;
         
+        /* Call the NDArray callback */
+        /* Must release the lock here, or we can get into a deadlock, because we can
+         * block on the plugin lock, and the plugin can be calling us */
+        epicsMutexUnlock(pPvt->mutexId);
         ADUtils->handleCallback(pPvt->asynStdInterfaces.handleInterruptPvt, pImage);
+        epicsMutexLock(pPvt->mutexId);
 
         /* See if acquisition is done */
         if (pPvt->framesRemaining > 0) pPvt->framesRemaining--;
@@ -938,7 +943,7 @@ static asynStatus writeADImage(void *drvPvt, asynUser *pasynUser, NDArray_t *pIm
     if (pPvt == NULL) return asynError;
     epicsMutexLock(pPvt->mutexId);
 
-    /* The simDetector does not allow downloading image data */    
+    /* The Prosilica does not allow downloading image data */    
     asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
           "%s:ADSetImage not currently supported\n", driverName);
     status = asynError;
@@ -1103,7 +1108,7 @@ int prosilicaConfig(char *portName, /* Port name */
 {
     drvADPvt *pPvt;
     int status = asynSuccess;
-    char *functionName = "simDetectorConfig";
+    char *functionName = "prosilicaConfig";
     asynStandardInterfaces *pInterfaces;
 
     pPvt = callocMustSucceed(1, sizeof(*pPvt), functionName);
