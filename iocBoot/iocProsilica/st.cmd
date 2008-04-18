@@ -20,8 +20,8 @@ drvNDStdArraysConfigure("PS1Image", 5, 0, "PS1", 0)
 dbLoadRecords("$(AD)/ADApp/Db/NDStdArrays.template","P=13PS1:,A=image1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,SIZE=8,FTVL=UCHAR,NELEMENTS=1392640")
 
 # Create a file saving plugin
-drvADFileConfigure("PS1File", 10, 0, "PS1", 0)
-dbLoadRecords("$(AD)/ADApp/Db/ADFile.template","P=13PS1:,F=file1:,PORT=PS1File,ADDR=0,TIMEOUT=1")
+drvNDFileConfigure("PS1File", 10, 0, "PS1", 0)
+dbLoadRecords("$(AD)/ADApp/Db/NDFile.template","P=13PS1:,F=file1:,PORT=PS1File,ADDR=0,TIMEOUT=1")
 
 #asynSetTraceMask("PS1",0,255)
 
