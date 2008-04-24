@@ -241,7 +241,7 @@ static void PVDECL PSFrameCallback(tPvFrame *pFrame)
         /* Must release the lock here, or we can get into a deadlock, because we can
          * block on the plugin lock, and the plugin can be calling us */
         epicsMutexUnlock(pPvt->mutexId);
-        ADUtils->handleCallback(pPvt->asynStdInterfaces.handleInterruptPvt, pImage);
+        ADUtils->handleCallback(pPvt->asynStdInterfaces.handleInterruptPvt, pImage, NDArrayData, 0);
         epicsMutexLock(pPvt->mutexId);
 
         /* See if acquisition is done */
