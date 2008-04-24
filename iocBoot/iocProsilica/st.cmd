@@ -23,6 +23,15 @@ dbLoadRecords("$(AD)/ADApp/Db/NDStdArrays.template","P=13PS1:,A=image1:,PORT=PS1
 drvNDFileConfigure("PS1File", 10, 0, "PS1", 0)
 dbLoadRecords("$(AD)/ADApp/Db/NDFile.template","P=13PS1:,F=file1:,PORT=PS1File,ADDR=0,TIMEOUT=1")
 
+# Create an ROI plugin
+drvNDROIConfigure("PS1ROI", 20, 0, "PS1", 0, 4)
+dbLoadRecords("$(AD)/ADApp/Db/NDROI.template","P=13PS1:,R=ROI1:,PORT=PS1ROI,ADDR=0,TIMEOUT=1")
+dbLoadRecords("$(AD)/ADApp/Db/NDROIN.template","P=13PS1:,R=ROI1:0:,PORT=PS1ROI,ADDR=0,TIMEOUT=1,HIST_SIZE=256")
+dbLoadRecords("$(AD)/ADApp/Db/NDROIN.template","P=13PS1:,R=ROI1:1:,PORT=PS1ROI,ADDR=1,TIMEOUT=1,HIST_SIZE=256")
+dbLoadRecords("$(AD)/ADApp/Db/NDROIN.template","P=13PS1:,R=ROI1:2:,PORT=PS1ROI,ADDR=2,TIMEOUT=1,HIST_SIZE=256")
+dbLoadRecords("$(AD)/ADApp/Db/NDROIN.template","P=13PS1:,R=ROI1:3:,PORT=PS1ROI,ADDR=3,TIMEOUT=1,HIST_SIZE=256")
+
+
 #asynSetTraceMask("PS1",0,255)
 
 set_requestfile_path("./")
