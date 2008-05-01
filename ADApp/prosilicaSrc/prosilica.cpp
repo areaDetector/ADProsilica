@@ -71,7 +71,6 @@ public:
     tPvCameraInfo PvCameraInfo;
     tPvFrame PvFrames[MAX_FRAMES];
     size_t maxFrameSize;
-    NDArray_t *pImage;
     int framesRemaining;
     char sensorType[20];
     char IPAddress[50];
@@ -227,8 +226,8 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* The frame we just received has NDArray_t* in Context[1] */ 
         /* We save the most recent good image buffer so it can be used in the PSWriteFile
          * and readADImage functions.  Now release it. */
-        if (this->pImage) NDArrayBuff->release(this->pImage);
-        this->pImage = pImage;
+        if (this->pArrays[addr]) NDArrayBuff->release(this->pArrays[addr];
+        this->pArrays[addr] = pImage;
         /* Set the properties of the image to those of the current frame */
         pImage->dims[0].size = pFrame->Width;
         pImage->dims[1].size = pFrame->Height;
@@ -278,7 +277,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         if (autoSave) status = writeFile();
 
         asynPrintIO(this->pasynUser, ASYN_TRACEIO_DRIVER, 
-            (const char *)this->pImage->pData, this->pImage->dataSize,
+            (const char *)this->pArrays[addr]->pData, this->pArrays[addr]->dataSize,
             "%s:%s: frameId=%d, timeStamp=%f\n",
             driverName, functionName, pImage->uniqueId, pImage->timeStamp);
 
@@ -880,29 +879,13 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
 
 
 prosilica::prosilica(const char *portName, int uniqueId)
-    : ADDriverBase(portName, 1, ADLastDriverParam), uniqueId(uniqueId)
+    : ADDriverBase(portName, 1, ADLastDriverParam), 
+      uniqueId(uniqueId), PvHandle(NULL), framesRemaining(0)
 
 {
     int status = asynSuccess;
     char *functionName = "prosilica";
     int addr=0;
-    asynStandardInterfaces *pInterfaces = &this->asynStdInterfaces;
-
-    status = pasynStandardInterfacesBase->initialize(portName, pInterfaces,
-                                                     this->pasynUser, this);
-    if (status != asynSuccess) {
-        printf("%s:%s: ERROR: Can't register interfaces: %s.\n",
-               driverName, functionName, this->pasynUser->errorMessage);
-        return;
-    }
-    
-    /* Connect to our device for asynTrace */
-    status = pasynManager->connectDevice(this->pasynUser, portName, 0);
-    if (status != asynSuccess) {
-        printf("%s:%s: ERROR: connectDevice failed\n", 
-            driverName, functionName);
-        return;
-    }
 
    /* Initialize the Prosilica PvAPI library 
     * We get an error if we call this twice, so we need a global flag to see if 
