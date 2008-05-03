@@ -226,7 +226,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* The frame we just received has NDArray_t* in Context[1] */ 
         /* We save the most recent good image buffer so it can be used in the PSWriteFile
          * and readADImage functions.  Now release it. */
-        if (this->pArrays[addr]) NDArrayBuff->release(this->pArrays[addr];
+        if (this->pArrays[addr]) NDArrayBuff->release(this->pArrays[addr]);
         this->pArrays[addr] = pImage;
         /* Set the properties of the image to those of the current frame */
         pImage->dims[0].size = pFrame->Width;
@@ -580,8 +580,8 @@ asynStatus prosilica::connectCamera()
     }
     
     bytesPerPixel = (this->sensorBits-1)/8 + 1;
-    /* If the camera supports color then there can be 4 values per pixel? */
-    if (strcmp(this->sensorType, "Mono") != 0) bytesPerPixel *= 4;
+    /* If the camera supports color then there can be 3 values per pixel */
+    if (strcmp(this->sensorType, "Mono") != 0) bytesPerPixel *= 3;
     this->maxFrameSize = this->sensorWidth * this->sensorHeight * bytesPerPixel;    
     for (i=0; i<MAX_FRAMES; i++) {
         pFrame = &this->PvFrames[i];
