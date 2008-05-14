@@ -32,7 +32,7 @@
 #include "ADParamLib.h"
 #include "ADUtils.h"
 #include "ADInterface.h"
-#include "NDArrayBuff.h"
+#include "NDArray.h"
 #include "ADDriverBase.h"
 
 #include "drvProsilica.h"
@@ -46,7 +46,7 @@ static int PvApiInitialized;
 
 class prosilica : public ADDriverBase {
 public:
-    prosilica(const char *portName, int uniqueId);
+    prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory);
                  
     /* These are the methods that we override from ADDriverBase */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
@@ -142,7 +142,7 @@ asynStatus prosilica::writeFile()
     char fullFileName[MAX_FILENAME_LEN];
     int fileFormat;
     int addr=0;
-    NDArray_t *pImage = this->pArrays[addr];
+    NDArray *pImage = this->pArrays[addr];
     tPvFrame PvFrame, *pFrame=&PvFrame;
     NDArrayInfo_t arrayInfo;
     const char *functionName = "writeFile";
@@ -165,7 +165,7 @@ asynStatus prosilica::writeFile()
     pFrame->Width = pImage->dims[0].size;
     pFrame->Height = pImage->dims[1].size;
     pFrame->ImageBuffer = pImage->pData;
-    NDArrayBuff->getInfo(pImage, &arrayInfo);
+    pImage->getInfo(&arrayInfo);
     pFrame->ImageBufferSize = arrayInfo.totalBytes;
     pFrame->ImageSize = pFrame->ImageBufferSize;
     
@@ -208,7 +208,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     int ndims, dims[2];
     int imageCounter;
     int addr=0;
-    NDArray_t *pImage;
+    NDArray *pImage;
     int badFrameCounter;
     const char *functionName = "frameCallback";
 
@@ -220,13 +220,13 @@ void prosilica::frameCallback(tPvFrame *pFrame)
 
     epicsMutexLock(this->mutexId);
 
-    pImage = (NDArray_t *)pFrame->Context[1];
+    pImage = (NDArray *)pFrame->Context[1];
 
     if (pFrame->Status == ePvErrSuccess) {
-        /* The frame we just received has NDArray_t* in Context[1] */ 
+        /* The frame we just received has NDArray* in Context[1] */ 
         /* We save the most recent good image buffer so it can be used in the PSWriteFile
          * and readADImage functions.  Now release it. */
-        if (this->pArrays[addr]) NDArrayBuff->release(this->pArrays[addr]);
+        if (this->pArrays[addr]) this->pArrays[addr]->release();
         this->pArrays[addr] = pImage;
         /* Set the properties of the image to those of the current frame */
         pImage->dims[0].size = pFrame->Width;
@@ -257,7 +257,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* Must release the lock here, or we can get into a deadlock, because we can
          * block on the plugin lock, and the plugin can be calling us */
         epicsMutexUnlock(this->mutexId);
-        doCallbacksNDArray(pImage, NDArrayData, 0);
+        doCallbacksHandle(pImage, NDArrayData, 0);
         epicsMutexLock(this->mutexId);
 
         /* See if acquisition is done */
@@ -285,7 +285,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         ndims = 2;
         dims[0] = this->sensorWidth;
         dims[1] = this->sensorHeight;
-        pImage = NDArrayBuff->alloc(ndims, dims, NDInt8, this->maxFrameSize, NULL);
+        pImage = this->pNDArrayPool->alloc(ndims, dims, NDInt8, this->maxFrameSize, NULL);
         /* Put the pointer to this image buffer in the frame context[1] */
         pFrame->Context[1] = pImage;
         /* Reset the frame buffer data pointer be this image buffer data pointer */
@@ -475,7 +475,7 @@ asynStatus prosilica::disconnectCamera()
 {
     int status = asynSuccess;
     tPvFrame *pFrame;
-    NDArray_t *pImage;
+    NDArray *pImage;
     static char *functionName = "disconnectCamera";
 
     if (!this->PvHandle) return(asynSuccess);
@@ -494,8 +494,8 @@ asynStatus prosilica::disconnectCamera()
     /* Must first free any image buffers they point to */
     pFrame = this->PvFrames;
     while (pFrame) {
-        pImage = (NDArray_t *)pFrame->Context[1];
-        if (pImage) NDArrayBuff->release(pImage);
+        pImage = (NDArray *)pFrame->Context[1];
+        if (pImage) pImage->release();
         pFrame->Context[1] = 0;
         pFrame++;
     }
@@ -512,7 +512,7 @@ asynStatus prosilica::connectCamera()
     int addr=0;
     int ndims, dims[2];
     int bytesPerPixel;
-    NDArray_t *pImage;
+    NDArray *pImage;
     static char *functionName = "connectCamera";
 
     /* First disconnect from the camera */
@@ -589,7 +589,7 @@ asynStatus prosilica::connectCamera()
         dims[0] = this->sensorWidth;
         dims[1] = this->sensorHeight;
        /* Allocate a new image buffer, make the size be the maximum that the frames can be */
-        pImage = NDArrayBuff->alloc(ndims, dims, NDInt8, this->maxFrameSize, NULL);
+        pImage = this->pNDArrayPool->alloc(ndims, dims, NDInt8, this->maxFrameSize, NULL);
         if (!pImage) {
             asynPrint(this->pasynUser, ASYN_TRACE_ERROR, 
                   "%s:%s: unable to allocate image %d on camera %d\n",
@@ -871,15 +871,17 @@ void prosilica::report(FILE *fp, int details)
 
 
 extern "C" int prosilicaConfig(char *portName, /* Port name */
-                               int uniqueId)   /* Unique ID # of this camera. */
+                               int uniqueId,   /* Unique ID # of this camera. */
+                               int maxBuffers,
+                               size_t maxMemory)
 {
-    new prosilica(portName, uniqueId);
+    new prosilica(portName, uniqueId, maxBuffers, maxMemory);
     return(asynSuccess);
 }   
 
 
-prosilica::prosilica(const char *portName, int uniqueId)
-    : ADDriverBase(portName, 1, ADLastDriverParam), 
+prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory)
+    : ADDriverBase(portName, 1, ADLastDriverParam, maxBuffers, maxMemory), 
       uniqueId(uniqueId), PvHandle(NULL), framesRemaining(0)
 
 {
