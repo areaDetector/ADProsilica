@@ -16,7 +16,6 @@
 #include <drvSup.h>
 #include <epicsExport.h>
 
-#include "ADInterface.h"
 #include "drvProsilica.h"
 
 /* Code for iocsh registration */
