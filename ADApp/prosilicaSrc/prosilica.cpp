@@ -24,12 +24,9 @@
 #include <epicsMutex.h>
 #include <cantProceed.h>
 
-#include <asynStandardInterfaces.h>
-
 #include "PvAPI.h"
 #include "ImageLib.h"
 
-#include "ADParamLib.h"
 #include "ADStdDriverParams.h"
 #include "NDArray.h"
 #include "ADDriverBase.h"
@@ -184,13 +181,13 @@ asynStatus prosilica::writeFile()
             pFrame->BitDepth = 16;
     }
     
-    status |= ADParam->getInteger(this->params[addr], ADFileFormat, &fileFormat);
+    status |= getIntegerParam(addr, ADFileFormat, &fileFormat);
     /* We only support writing in TIFF format for now */
     tiffStatus = ImageWriteTiff(fullFileName, pFrame);
     if (tiffStatus != 1) {
         status |= asynError;
     } else {
-        status |= ADParam->setString(this->params[addr], ADFullFileName_RBV, fullFileName);
+        status |= setStringParam(addr, ADFullFileName_RBV, fullFileName);
     }
     return((asynStatus)status);
 }
@@ -266,19 +263,19 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* See if acquisition is done */
         if (this->framesRemaining > 0) this->framesRemaining--;
         if (this->framesRemaining == 0) {
-            ADParam->setInteger(this->params[addr], ADAcquire, 0);
-            ADParam->setInteger(this->params[addr], ADAcquire_RBV, 0);
-            ADParam->setInteger(this->params[addr], ADStatus_RBV, ADStatusIdle);
+            setIntegerParam(addr, ADAcquire, 0);
+            setIntegerParam(addr, ADAcquire_RBV, 0);
+            setIntegerParam(addr, ADStatus_RBV, ADStatusIdle);
         }
 
         /* Update the frame counter */
-        ADParam->getInteger(this->params[addr], ADImageCounter, &imageCounter);
+        getIntegerParam(addr, ADImageCounter, &imageCounter);
         imageCounter++;
-        ADParam->setInteger(this->params[addr], ADImageCounter, imageCounter);
-        ADParam->setInteger(this->params[addr], ADImageCounter_RBV, imageCounter);
+        setIntegerParam(addr, ADImageCounter, imageCounter);
+        setIntegerParam(addr, ADImageCounter_RBV, imageCounter);
 
         /* If autoSave is set then save the image */
-        status = ADParam->getInteger(this->params[addr], ADAutoSave, &autoSave);
+        status = getIntegerParam(addr, ADAutoSave, &autoSave);
         if (autoSave) status = writeFile();
 
         asynPrintIO(this->pasynUser, ASYN_TRACEIO_DRIVER, 
@@ -299,13 +296,13 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         asynPrint(this->pasynUser, ASYN_TRACE_FLOW, 
             "%s:%s: ERROR, frame has error code %d\n",
             driverName, functionName, pFrame->Status);
-        ADParam->getInteger(this->params[addr], PSBadFrameCounter_RBV, &badFrameCounter);
+        getIntegerParam(addr, PSBadFrameCounter_RBV, &badFrameCounter);
         badFrameCounter++;
-        ADParam->setInteger(this->params[addr], PSBadFrameCounter_RBV, badFrameCounter);
+        setIntegerParam(addr, PSBadFrameCounter_RBV, badFrameCounter);
     }
 
     /* Update any changed parameters */
-    ADParam->callCallbacks(this->params[addr]);
+    callParamCallbacks(addr, addr);
     
     /* Queue this frame to run again */
     status = PvCaptureQueueFrame(this->PvHandle, pFrame, frameCallbackC); 
@@ -320,14 +317,14 @@ asynStatus prosilica::setGeometry()
     static char *functionName = "setGeometry";
     
     /* Get all of the current geometry parameters from the parameter library */
-    status |= ADParam->getInteger(this->params[addr], ADBinX, &binX);
+    status |= getIntegerParam(addr, ADBinX, &binX);
     if (binX < 1) binX = 1;
-    status |= ADParam->getInteger(this->params[addr], ADBinY, &binY);
+    status |= getIntegerParam(addr, ADBinY, &binY);
     if (binY < 1) binY = 1;
-    status |= ADParam->getInteger(this->params[addr], ADMinX, &minX);
-    status |= ADParam->getInteger(this->params[addr], ADMinY, &minY);
-    status |= ADParam->getInteger(this->params[addr], ADSizeX, &sizeX);
-    status |= ADParam->getInteger(this->params[addr], ADSizeY, &sizeY);
+    status |= getIntegerParam(addr, ADMinX, &minX);
+    status |= getIntegerParam(addr, ADMinY, &minY);
+    status |= getIntegerParam(addr, ADSizeX, &sizeX);
+    status |= getIntegerParam(addr, ADSizeY, &sizeY);
     
     status |= PvAttrUint32Set(this->PvHandle, "BinningX", binX);
     status |= PvAttrUint32Set(this->PvHandle, "BinningY", binY);
@@ -356,12 +353,21 @@ asynStatus prosilica::getGeometry()
     status |= PvAttrUint32Get(this->PvHandle, "Width",    &sizeX);
     status |= PvAttrUint32Get(this->PvHandle, "Height",   &sizeY);
     
-    status |= ADParam->setInteger(this->params[addr], ADBinX_RBV,  binX);
-    status |= ADParam->setInteger(this->params[addr], ADBinY_RBV,  binY);
-    status |= ADParam->setInteger(this->params[addr], ADMinX_RBV,  minX*binX);
-    status |= ADParam->setInteger(this->params[addr], ADMinY_RBV,  minY*binY);
-    status |= ADParam->setInteger(this->params[addr], ADImageSizeX_RBV, sizeX);
-    status |= ADParam->setInteger(this->params[addr], ADImageSizeY_RBV, sizeY);
+    status |= setIntegerParam(addr, ADBinX,  binX);
+    status |= setIntegerParam(addr, ADBinY,  binY);
+    status |= setIntegerParam(addr, ADMinX,  minX*binX);
+    status |= setIntegerParam(addr, ADMinY,  minY*binY);
+    status |= setIntegerParam(addr, ADSizeX, sizeX*binX);
+    status |= setIntegerParam(addr, ADSizeY, sizeY*binY);
+
+    status |= setIntegerParam(addr, ADBinX_RBV,  binX);
+    status |= setIntegerParam(addr, ADBinY_RBV,  binY);
+    status |= setIntegerParam(addr, ADMinX_RBV,  minX*binX);
+    status |= setIntegerParam(addr, ADMinY_RBV,  minY*binY);
+    status |= setIntegerParam(addr, ADSizeX_RBV, sizeX*binX);
+    status |= setIntegerParam(addr, ADSizeY_RBV, sizeY*binY);
+    status |= setIntegerParam(addr, ADImageSizeX_RBV, sizeX);
+    status |= setIntegerParam(addr, ADImageSizeY_RBV, sizeY);
     
     if (status) asynPrint(this->pasynUser, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
@@ -380,25 +386,25 @@ asynStatus prosilica::readStats()
     static char *functionName = "readStats";
     
     status |= PvAttrEnumGet      (this->PvHandle, "StatDriverType", buffer, sizeof(buffer), &nchars);
-    status |= ADParam->setString (this->params[addr],  PSStatDriverType_RBV, buffer);
+    status |= setStringParam (addr,  PSStatDriverType_RBV, buffer);
     status |= PvAttrStringGet    (this->PvHandle, "StatFilterVersion", buffer, sizeof(buffer), &nchars);
-    status |= ADParam->setString (this->params[addr],  PSStatFilterVersion_RBV, buffer);
+    status |= setStringParam (addr,  PSStatFilterVersion_RBV, buffer);
     status |= PvAttrFloat32Get   (this->PvHandle, "StatFrameRate", &fval);
-    status |= ADParam->setDouble (this->params[addr],  PSStatFrameRate_RBV, fval);
+    status |= setDoubleParam (addr,  PSStatFrameRate_RBV, fval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatFramesCompleted", &uval);
-    status |= ADParam->setInteger(this->params[addr],  PSStatFramesCompleted_RBV, (int)uval);
+    status |= setIntegerParam(addr,  PSStatFramesCompleted_RBV, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatFramesDropped", &uval);
-    status |= ADParam->setInteger(this->params[addr],  PSStatFramesDropped_RBV, (int)uval);
+    status |= setIntegerParam(addr,  PSStatFramesDropped_RBV, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsErroneous", &uval);
-    status |= ADParam->setInteger(this->params[addr],  PSStatPacketsErroneous_RBV, (int)uval);
+    status |= setIntegerParam(addr,  PSStatPacketsErroneous_RBV, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsMissed", &uval);
-    status |= ADParam->setInteger(this->params[addr],  PSStatPacketsMissed_RBV, (int)uval);
+    status |= setIntegerParam(addr,  PSStatPacketsMissed_RBV, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsReceived", &uval);
-    status |= ADParam->setInteger(this->params[addr],  PSStatPacketsReceived_RBV, (int)uval);
+    status |= setIntegerParam(addr,  PSStatPacketsReceived_RBV, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsRequested", &uval);
-    status |= ADParam->setInteger(this->params[addr],  PSStatPacketsRequested_RBV, (int)uval);
+    status |= setIntegerParam(addr,  PSStatPacketsRequested_RBV, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsResent", &uval);
-    status |= ADParam->setInteger(this->params[addr],  PSStatPacketsResent_RBV, (int)uval);
+    status |= setIntegerParam(addr,  PSStatPacketsResent_RBV, (int)uval);
     if (status) asynPrint(this->pasynUser, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
                       driverName, functionName, status);
@@ -417,19 +423,19 @@ asynStatus prosilica::readParameters()
     static char *functionName = "setGeometry";
 
     status |= PvAttrUint32Get(this->PvHandle, "TotalBytesPerFrame", &intVal);
-    ADParam->setInteger(this->params[addr], ADImageSize_RBV, intVal);
+    setIntegerParam(addr, ADImageSize_RBV, intVal);
 
     intVal = -1;
     status |= PvAttrEnumGet(this->PvHandle, "PixelFormat", buffer, sizeof(buffer), &nchars);
     if (!strcmp(buffer, "Mono8")) intVal = NDUInt8;
     else if (!strcmp(buffer, "Mono16")) intVal = NDUInt16;
     /* We don't support color modes yet */
-    status |= ADParam->setInteger(this->params[addr], ADDataType_RBV, intVal);
+    status |= setIntegerParam(addr, ADDataType_RBV, intVal);
     
     status |= getGeometry();
 
     status |= PvAttrUint32Get(this->PvHandle, "AcquisitionFrameCount", &intVal);
-    status |= ADParam->setInteger(this->params[addr], ADNumImages_RBV, intVal);
+    status |= setIntegerParam(addr, ADNumImages_RBV, intVal);
 
     status |= PvAttrEnumGet(this->PvHandle, "AcquisitionMode", buffer, sizeof(buffer), &nchars);
     if      (!strcmp(buffer, "SingleFrame")) intVal = ADImageSingle;
@@ -437,41 +443,41 @@ asynStatus prosilica::readParameters()
     else if (!strcmp(buffer, "Recorder"))    intVal = ADImageMultiple;
     else if (!strcmp(buffer, "Continuous"))  intVal = ADImageContinuous;
     else {intVal=0; status |= asynError;}
-    status |= ADParam->setInteger(this->params[addr], ADImageMode_RBV, intVal);
+    status |= setIntegerParam(addr, ADImageMode_RBV, intVal);
 
     status |= PvAttrEnumGet(this->PvHandle, "FrameStartTriggerMode", buffer, sizeof(buffer), &nchars);
     for (intVal=0; intVal<NUM_START_TRIGGER_MODES; intVal++) {
         if (strcmp(buffer, PSTriggerStartStrings[intVal]) == 0) {
-            status |= ADParam->setInteger(this->params[addr], ADTriggerMode_RBV, intVal);
+            status |= setIntegerParam(addr, ADTriggerMode_RBV, intVal);
             break;
         }
     }
     if (intVal == NUM_START_TRIGGER_MODES) {
-        status |= ADParam->setInteger(this->params[addr], ADTriggerMode_RBV, 0);
+        status |= setIntegerParam(addr, ADTriggerMode_RBV, 0);
         status |= asynError;
     }
     
     /* Prosilica does not support more than 1 exposure per frame */
-    status |= ADParam->setInteger(this->params[addr], ADNumExposures_RBV, 1);
+    status |= setIntegerParam(addr, ADNumExposures_RBV, 1);
 
     /* Prosilica uses integer microseconds */
     status |= PvAttrUint32Get(this->PvHandle, "ExposureValue", &intVal);
     dval = intVal / 1.e6;
-    status |= ADParam->setDouble(this->params[addr], ADAcquireTime_RBV, dval);
+    status |= setDoubleParam(addr, ADAcquireTime_RBV, dval);
 
     /* Prosilica uses a frame rate in Hz */
     status |= PvAttrFloat32Get(this->PvHandle, "FrameRate", &fltVal);
     if (fltVal == 0.) fltVal = 1;
     dval = 1. / fltVal;
-    status |= ADParam->setDouble(this->params[addr], ADAcquirePeriod_RBV, dval);
+    status |= setDoubleParam(addr, ADAcquirePeriod_RBV, dval);
 
     /* Prosilica uses an integer value */
     status |= PvAttrUint32Get(this->PvHandle, "GainValue", &intVal);
     dval = intVal;
-    status |= ADParam->setDouble(this->params[addr], ADGain_RBV, dval);
+    status |= setDoubleParam(addr, ADGain_RBV, dval);
 
     /* Call the callbacks to update the values in higher layers */
-    ADParam->callCallbacks(this->params[addr]);
+    callParamCallbacks(addr, addr);
     
     if (status) asynPrint(this->pasynUser, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
@@ -621,13 +627,13 @@ asynStatus prosilica::connectCamera()
     }
 
     /* Set some initial values for other parameters */
-    status =  ADParam->setString (this->params[addr], ADManufacturer_RBV, "Prosilica");
-    status |= ADParam->setString (this->params[addr], ADModel_RBV, this->PvCameraInfo.DisplayName);
-    status |= ADParam->setInteger(this->params[addr], ADSizeX_RBV, this->sensorWidth);
-    status |= ADParam->setInteger(this->params[addr], ADSizeY_RBV, this->sensorHeight);
-    status |= ADParam->setInteger(this->params[addr], ADMaxSizeX_RBV, this->sensorWidth);
-    status |= ADParam->setInteger(this->params[addr], ADMaxSizeY_RBV, this->sensorHeight);
-    status |= ADParam->setInteger(this->params[addr], PSBadFrameCounter_RBV, 0);
+    status =  setStringParam (addr, ADManufacturer_RBV, "Prosilica");
+    status |= setStringParam (addr, ADModel_RBV, this->PvCameraInfo.DisplayName);
+    status |= setIntegerParam(addr, ADSizeX_RBV, this->sensorWidth);
+    status |= setIntegerParam(addr, ADSizeY_RBV, this->sensorHeight);
+    status |= setIntegerParam(addr, ADMaxSizeX_RBV, this->sensorWidth);
+    status |= setIntegerParam(addr, ADMaxSizeY_RBV, this->sensorHeight);
+    status |= setIntegerParam(addr, PSBadFrameCounter_RBV, 0);
     if (status) {
         asynPrint(this->pasynUser, ASYN_TRACE_ERROR, 
               "%s:%s unable to set camera parameters on camera %d\n",
@@ -661,8 +667,8 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
 
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
-    status |= ADParam->setInteger(this->params[addr], function, value);
-    status |= ADParam->setInteger(this->params[addr], function+1, value);
+    status |= setIntegerParam(addr, function, value);
+    status |= setIntegerParam(addr, function+1, value);
 
     switch (function) {
         case ADBinX:
@@ -698,8 +704,8 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
                    many frames have been requested.  If we are in continuous mode then set the number of
                    remaining frames to -1. */
                 int imageMode, numImages;
-                status |= ADParam->getInteger(this->params[addr], ADImageMode, &imageMode);
-                status |= ADParam->getInteger(this->params[addr], ADNumImages, &numImages);
+                status |= getIntegerParam(addr, ADImageMode, &imageMode);
+                status |= getIntegerParam(addr, ADNumImages, &numImages);
                 switch(imageMode) {
                 case ADImageSingle:
                     this->framesRemaining = 1;
@@ -711,10 +717,10 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
                     this->framesRemaining = -1;
                     break;
                 }
-                ADParam->setInteger(this->params[addr], ADStatus_RBV, ADStatusAcquire);
+                setIntegerParam(addr, ADStatus_RBV, ADStatusAcquire);
                 status |= PvCommandRun(this->PvHandle, "AcquisitionStart");
             } else {
-                ADParam->setInteger(this->params[addr], ADStatus_RBV, ADStatusIdle);
+                setIntegerParam(addr, ADStatus_RBV, ADStatusIdle);
                 status |= PvCommandRun(this->PvHandle, "AcquisitionAbort");
             }
             break;
@@ -778,8 +784,8 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
-    status |= ADParam->setDouble(this->params[addr], function, value);
-    status |= ADParam->setDouble(this->params[addr], function+1, value);
+    status |= setDoubleParam(addr, function, value);
+    status |= setDoubleParam(addr, function+1, value);
 
     switch (function) {
     case ADAcquireTime:
@@ -891,7 +897,7 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
 
 
 prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory)
-    : ADDriverBase(portName, 1, ADLastDriverParam, maxBuffers, maxMemory), 
+    : ADDriverBase(portName, 1, ADLastDriverParam, maxBuffers, maxMemory, 0, 0), 
       uniqueId(uniqueId), PvHandle(NULL), framesRemaining(0)
 
 {
@@ -924,5 +930,6 @@ prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t 
                driverName, functionName, uniqueId);
         return;
     }
+        
 }
 
