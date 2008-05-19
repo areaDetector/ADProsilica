@@ -663,8 +663,6 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
     int reset=0;
     const char *functionName = "writeInt32";
 
-    epicsMutexLock(this->mutexId);
-
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
     status |= setIntegerParam(addr, function, value);
@@ -768,7 +766,6 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
               "%s:%s: function=%d, value=%d\n", 
               driverName, functionName, function, value);
-    epicsMutexUnlock(this->mutexId);
     return((asynStatus)status);
 }
 
@@ -780,9 +777,7 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     tPvUint32 intVal;
     tPvFloat32 fltVal;
 
-    epicsMutexLock(this->mutexId);
-
-    /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
+   /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
     status |= setDoubleParam(addr, function, value);
     status |= setDoubleParam(addr, function+1, value);
@@ -818,7 +813,6 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
               "%s:writeFloat64: function=%d, value=%f\n", 
               driverName, function, value);
-    epicsMutexUnlock(this->mutexId);
     return((asynStatus)status);
 }
 
