@@ -14,7 +14,7 @@ LIB_SRCS += drvProsilicaEpics.c
 LIB_LIBS += ADPlugin ADBase netCDF
 LIB_LIBS += PvAPI ImageLib
 LIB_LIBS += ccd
-LIB_LIBS += sscan autosave
+LIB_LIBS += calc sscan autosave
 LIB_LIBS += asyn
 LIB_LIBS += $(EPICS_BASE_IOC_LIBS)
 
@@ -40,7 +40,7 @@ prosilicaApp_SRCS_vxWorks += prosilicaApp_registerRecordDeviceDriver.cpp
 prosilicaApp_LIBS += prosilica
 prosilicaApp_LIBS += PvAPI ImageLib
 prosilicaApp_LIBS += ADBase ADPlugin netCDF
-prosilicaApp_LIBS += sscan autosave 
+prosilicaApp_LIBS += calc sscan autosave 
 prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
 
