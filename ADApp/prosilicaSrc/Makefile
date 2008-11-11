@@ -8,7 +8,7 @@ include $(TOP)/configure/CONFIG
 #USR_CXXFLAGS +=
 
 LIBRARY_IOC_WIN32 += prosilica
-LIBRARY_IOC_cygwin32 += prosilica
+#LIBRARY_IOC_cygwin32 += prosilica
 LIB_SRCS += prosilica.cpp
 LIB_SRCS += drvProsilicaEpics.c
 LIB_LIBS += ADPlugin ADBase netCDF
@@ -27,7 +27,7 @@ LIB_INSTALLS_cygwin32 += ../PvAPI.lib ../ImageLib.lib
 
 #==================================
 PROD_IOC_WIN32 += prosilicaApp
-PROD_IOC_cygwin32 += prosilicaApp
+#PROD_IOC_cygwin32 += prosilicaApp
 # <name>.dbd will be created from <name>Include.dbd
 DBD += prosilicaApp.dbd
 DBD += prosilicaSupport.dbd
@@ -44,6 +44,7 @@ prosilicaApp_LIBS += calc sscan autosave
 prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
 
+#prosilicaApp_SYS_LIBS_cygwin32 += rpc
 #=============================
 
 include $(TOP)/configure/RULES
