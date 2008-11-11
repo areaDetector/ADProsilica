@@ -94,10 +94,10 @@ extern "C" {
 //===== #DEFINES ==============================================================
 
 #ifndef PVDECL
-        #ifdef _MSC_VER
+        #if defined(_MSC_VER) || defined(CYGWIN32)
                 #define PVDECL           __stdcall
         #else
-                #if defined(_LINUX) || defined(_QNX)
+                #if defined(_LINUX) || defined(UNIX) || defined(_QNX)
                         #define PVDECL
                 #else
                         #error Define PVDECL to be your compiler keyword for "standard call"
@@ -356,7 +356,7 @@ typedef void (PVDECL *tPvFrameCallback)(tPvFrame* Frame);
 //----- Attributes ------------------------------------------------------------
 
 
-#if defined(_M_IX86) || defined(_x86) || defined(_WIN64) || defined(_x64)
+#if defined(_M_IX86) || defined(_x86) || defined(_WIN64) || defined(CYGWIN32) || defined(_x64)
 typedef long            tPvInt32;   // 32-bit integer
 typedef unsigned long   tPvUint32;  // 32-bit unsigned integer
 typedef float           tPvFloat32; // IEEE 32-bit float
