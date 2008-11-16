@@ -9,6 +9,7 @@ prosilicaApp_registerRecordDeviceDriver(pdbbase)
 prosilicaConfig("PS1", 50022, 50, 200000000)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/ADBase.template",   "P=13PS1:,R=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/prosilica.template","P=13PS1:,R=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDFile.template",   "P=13PS1:,R=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
 
 #prosilicaConfig("PS2", 50022, 10, 50000000)
 #dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/ADBase.template",   "P=13PS1:,R=cam2:,PORT=PS2,ADDR=0,TIMEOUT=1")
