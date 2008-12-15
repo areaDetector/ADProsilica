@@ -5,15 +5,15 @@ include $(TOP)/configure/CONFIG
 #=============================
 
 #USR_CFLAGS += 
-#USR_CXXFLAGS +=
+USR_CXXFLAGS_Linux += -D_LINUX -D_x86
 
 LIBRARY_IOC_WIN32 += prosilica
 #LIBRARY_IOC_cygwin32 += prosilica
+LIBRARY_IOC_Linux += prosilica
 LIB_SRCS += prosilica.cpp
 LIB_SRCS += drvProsilicaEpics.c
 LIB_LIBS += ADPlugin ADBase netCDF
 LIB_LIBS += PvAPI ImageLib
-LIB_LIBS += ccd
 LIB_LIBS += calc sscan autosave
 LIB_LIBS += asyn
 LIB_LIBS += $(EPICS_BASE_IOC_LIBS)
@@ -24,9 +24,11 @@ BIN_INSTALLS_WIN32    += ../PvAPI.dll
 BIN_INSTALLS_cygwin32 += ../PvAPI.dll
 LIB_INSTALLS_WIN32    += ../PvAPI.lib ../ImageLib.lib
 LIB_INSTALLS_cygwin32 += ../PvAPI.lib ../ImageLib.lib
+LIB_INSTALLS_linux    += ../libPvAPI.a ../libImageLib.a
 
 #==================================
 PROD_IOC_WIN32 += prosilicaApp
+PROD_IOC_Linux += prosilicaApp
 #PROD_IOC_cygwin32 += prosilicaApp
 # <name>.dbd will be created from <name>Include.dbd
 DBD += prosilicaApp.dbd
@@ -45,6 +47,7 @@ prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
 
 #prosilicaApp_SYS_LIBS_cygwin32 += rpc
+LDLIBS += -ltiff -ljpeg -lz
 #=============================
 
 include $(TOP)/configure/RULES
