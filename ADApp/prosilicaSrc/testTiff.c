@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include "PvAPI.h"
+#include "PvApi.h"
 #include "ImageLib.h"
 
 int main(int argc, char **argv)
