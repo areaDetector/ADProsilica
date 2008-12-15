@@ -24,7 +24,7 @@
 #include <epicsMutex.h>
 #include <cantProceed.h>
 
-#include "PvAPI.h"
+#include "PvApi.h"
 #include "ImageLib.h"
 
 #include "ADStdDriverParams.h"
@@ -33,7 +33,7 @@
 
 #include "drvProsilica.h"
 
-static char *driverName = "prosilica";
+static const char *driverName = "prosilica";
 
 static int PvApiInitialized;
 
@@ -91,11 +91,11 @@ typedef enum {
     PSTriggerStartSoftware
 } PSTriggerStartMode_t;
 
-static char *PSTriggerStartStrings[] = {
+static const char *PSTriggerStartStrings[] = {
     "Freerun","SyncIn1","SyncIn2","SyncIn3","SyncIn4","FixedRate","Software"
 };
  
-#define NUM_START_TRIGGER_MODES (sizeof(PSTriggerStartStrings) / sizeof(PSTriggerStartStrings[0]))
+#define NUM_START_TRIGGER_MODES (int)(sizeof(PSTriggerStartStrings) / sizeof(PSTriggerStartStrings[0]))
 
 typedef enum {
     /* These parameters are for the camera statistics */
@@ -142,7 +142,7 @@ asynStatus prosilica::writeFile()
     NDArray *pImage = this->pArrays[addr];
     tPvFrame PvFrame, *pFrame=&PvFrame;
     NDArrayInfo_t arrayInfo;
-    const char *functionName = "writeFile";
+    static const char *functionName = "writeFile";
 
     if (!pImage) return asynError;
     
@@ -177,6 +177,12 @@ asynStatus prosilica::writeFile()
         case NDUInt16:
             pFrame->Format = ePvFmtMono16;
             pFrame->BitDepth = 16;
+            break;
+        default:
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                "%s:%s: error unsupported data type=%d\n",
+                driverName, functionName, pImage->dataType);
+            break;
     }
     
     status |= getIntegerParam(addr, ADFileFormat, &fileFormat);
@@ -207,7 +213,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     int addr=0;
     NDArray *pImage;
     int badFrameCounter;
-    const char *functionName = "frameCallback";
+    static const char *functionName = "frameCallback";
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
      * we will not be able to take the mutex and things will hang.  Prevent this by looking at the frame
@@ -310,7 +316,7 @@ asynStatus prosilica::setGeometry()
     int status = asynSuccess;
     int addr=0;
     int binX, binY, minY, minX, sizeX, sizeY;
-    static char *functionName = "setGeometry";
+    static const char *functionName = "setGeometry";
     
     /* Get all of the current geometry parameters from the parameter library */
     status |= getIntegerParam(addr, ADBinX, &binX);
@@ -340,7 +346,7 @@ asynStatus prosilica::getGeometry()
     int status = asynSuccess;
     int addr=0;
     tPvUint32 binX, binY, minY, minX, sizeX, sizeY;
-    static char *functionName = "setGeometry";
+    static const char *functionName = "setGeometry";
 
     status |= PvAttrUint32Get(this->PvHandle, "BinningX", &binX);
     status |= PvAttrUint32Get(this->PvHandle, "BinningY", &binY);
@@ -379,11 +385,19 @@ asynStatus prosilica::readStats()
     unsigned long nchars;
     tPvUint32 uval;
     float fval;
-    static char *functionName = "readStats";
+    static const char *functionName = "readStats";
     
     status |= PvAttrEnumGet      (this->PvHandle, "StatDriverType", buffer, sizeof(buffer), &nchars);
-    status |= setStringParam (addr,  PSStatDriverType, buffer);
+    if (status == ePvErrNotFound) {
+        status = 0;
+        strcpy(buffer, "Unsupported parameter");
+    }
+    status |= setStringParam (addr,  PSStatDriverType, buffer);    
     status |= PvAttrStringGet    (this->PvHandle, "StatFilterVersion", buffer, sizeof(buffer), &nchars);
+    if (status == ePvErrNotFound) {
+        status = 0;
+        strcpy(buffer, "Unsupported parameter");
+    }
     status |= setStringParam (addr,  PSStatFilterVersion, buffer);
     status |= PvAttrFloat32Get   (this->PvHandle, "StatFrameRate", &fval);
     status |= setDoubleParam (addr,  PSStatFrameRate, fval);
@@ -416,7 +430,7 @@ asynStatus prosilica::readParameters()
     double dval;
     unsigned long nchars;
     char buffer[20];
-    static char *functionName = "setGeometry";
+    static const char *functionName = "setGeometry";
 
     status |= PvAttrUint32Get(this->PvHandle, "TotalBytesPerFrame", &intVal);
     setIntegerParam(addr, ADImageSize, intVal);
@@ -486,7 +500,7 @@ asynStatus prosilica::disconnectCamera()
     int status = asynSuccess;
     tPvFrame *pFrame;
     NDArray *pImage;
-    static char *functionName = "disconnectCamera";
+    static const char *functionName = "disconnectCamera";
 
     if (!this->PvHandle) return(asynSuccess);
     status |= PvCaptureQueueClear(this->PvHandle);
@@ -523,7 +537,7 @@ asynStatus prosilica::connectCamera()
     int ndims, dims[2];
     int bytesPerPixel;
     NDArray *pImage;
-    static char *functionName = "connectCamera";
+    static const char *functionName = "connectCamera";
 
     /* First disconnect from the camera */
     disconnectCamera();
@@ -656,7 +670,6 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
     int function = pasynUser->reason;
     int status = asynSuccess;
     int addr=0;
-    int reset=0;
     const char *functionName = "writeInt32";
 
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
@@ -850,22 +863,22 @@ void prosilica::report(FILE *fp, int details)
     numReturned = PvCameraList(cameraInfo, 20, &numTotal);
 
     fprintf(fp, "Prosilica camera %s Unique ID=%d\n", 
-            this->portName, this->uniqueId);
+            this->portName, (int)this->uniqueId);
     if (details > 0) {
-        fprintf(fp, "  ID:                %ul\n", this->PvCameraInfo.UniqueId);
+        fprintf(fp, "  ID:                %lu\n", this->PvCameraInfo.UniqueId);
         fprintf(fp, "  IP address:        %s\n",  this->IPAddress);
         fprintf(fp, "  Serial number:     %s\n",  this->PvCameraInfo.SerialString);
         fprintf(fp, "  Model:             %s\n",  this->PvCameraInfo.DisplayName);
         fprintf(fp, "  Sensor type:       %s\n",  this->sensorType);
-        fprintf(fp, "  Sensor bits:       %d\n",  this->sensorBits);
-        fprintf(fp, "  Sensor width:      %d\n",  this->sensorWidth);
-        fprintf(fp, "  Sensor height:     %d\n",  this->sensorHeight);
-        fprintf(fp, "  Frame buffer size: %d\n",  this->PvFrames[0].ImageBufferSize);
-        fprintf(fp, "  Time stamp freq:   %d\n",  this->timeStampFrequency);
+        fprintf(fp, "  Sensor bits:       %d\n",  (int)this->sensorBits);
+        fprintf(fp, "  Sensor width:      %d\n",  (int)this->sensorWidth);
+        fprintf(fp, "  Sensor height:     %d\n",  (int)this->sensorHeight);
+        fprintf(fp, "  Frame buffer size: %d\n",  (int)this->PvFrames[0].ImageBufferSize);
+        fprintf(fp, "  Time stamp freq:   %d\n",  (int)this->timeStampFrequency);
         fprintf(fp, "\n");
-        fprintf(fp, "List of all Prosilica cameras found, (total=%d):\n", numReturned);
+        fprintf(fp, "List of all Prosilica cameras found, (total=%d):\n", (int)numReturned);
         for (i=0; i<(int)numReturned; i++) {
-            fprintf(fp, "    ID: %d\n", cameraInfo[i].UniqueId);
+            fprintf(fp, "    ID: %d\n", (int)cameraInfo[i].UniqueId);
         }
     }
 
@@ -886,12 +899,11 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
 
 prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory)
     : ADDriver(portName, 1, ADLastDriverParam, maxBuffers, maxMemory, 0, 0), 
-      uniqueId(uniqueId), PvHandle(NULL), framesRemaining(0)
+      PvHandle(NULL), uniqueId(uniqueId), framesRemaining(0)
 
 {
     int status = asynSuccess;
-    char *functionName = "prosilica";
-    int addr=0;
+    static const char *functionName = "prosilica";
 
    /* Initialize the Prosilica PvAPI library 
     * We get an error if we call this twice, so we need a global flag to see if 
