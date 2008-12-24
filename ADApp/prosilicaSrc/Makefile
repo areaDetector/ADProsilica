@@ -7,6 +7,9 @@ include $(TOP)/configure/CONFIG
 #USR_CFLAGS += 
 USR_CXXFLAGS_Linux += -D_LINUX -D_x86
 
+# We install PvApi.h because the NDPluginColorConvert uses it for Bayer to RGB color conversion
+INC += PvApi.h
+
 LIBRARY_IOC_WIN32 += prosilica
 #LIBRARY_IOC_cygwin32 += prosilica
 LIBRARY_IOC_Linux += prosilica
@@ -47,7 +50,7 @@ prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
 
 #prosilicaApp_SYS_LIBS_cygwin32 += rpc
-LDLIBS += -ltiff -ljpeg -lz
+prosilicaApp_SYS_LIBS_Linux += tiff jpeg z
 #=============================
 
 include $(TOP)/configure/RULES
