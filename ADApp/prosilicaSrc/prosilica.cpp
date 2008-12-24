@@ -40,6 +40,7 @@ static int PvApiInitialized;
 #define MAX_FRAMES  2  /* Number of frame buffers for PvApi */
 #define MAX_PACKET_SIZE 8228
 
+
 class prosilica : public ADDriver {
 public:
     prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory);
@@ -54,6 +55,7 @@ public:
     /* These are the methods that are new to this class */
     asynStatus writeFile();
     void frameCallback(tPvFrame *pFrame);
+    asynStatus setPixelFormat();
     asynStatus setGeometry();
     asynStatus getGeometry();
     asynStatus readStats();
@@ -138,8 +140,7 @@ asynStatus prosilica::writeFile()
     int status = asynSuccess, tiffStatus;
     char fullFileName[MAX_FILENAME_LEN];
     int fileFormat;
-    int addr=0;
-    NDArray *pImage = this->pArrays[addr];
+    NDArray *pImage = this->pArrays[0];
     tPvFrame PvFrame, *pFrame=&PvFrame;
     NDArrayInfo_t arrayInfo;
     static const char *functionName = "writeFile";
@@ -185,13 +186,13 @@ asynStatus prosilica::writeFile()
             break;
     }
     
-    status |= getIntegerParam(addr, ADFileFormat, &fileFormat);
+    status |= getIntegerParam(ADFileFormat, &fileFormat);
     /* We only support writing in TIFF format for now */
     tiffStatus = ImageWriteTiff(fullFileName, pFrame);
     if (tiffStatus != 1) {
         status |= asynError;
     } else {
-        status |= setStringParam(addr, ADFullFileName, fullFileName);
+        status |= setStringParam(ADFullFileName, fullFileName);
     }
     return((asynStatus)status);
 }
@@ -206,11 +207,9 @@ static void PVDECL frameCallbackC(tPvFrame *pFrame)
 void prosilica::frameCallback(tPvFrame *pFrame)
 {
     int status = asynSuccess;
-    NDDataType_t dataType;
     int autoSave;
     int ndims, dims[2];
     int imageCounter;
-    int addr=0;
     NDArray *pImage;
     int badFrameCounter;
     static const char *functionName = "frameCallback";
@@ -229,27 +228,76 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* The frame we just received has NDArray* in Context[1] */ 
         /* We save the most recent good image buffer so it can be used in the PSWriteFile
          * and readADImage functions.  Now release it. */
-        if (this->pArrays[addr]) this->pArrays[addr]->release();
-        this->pArrays[addr] = pImage;
+        if (this->pArrays[0]) this->pArrays[0]->release();
+        this->pArrays[0] = pImage;
         /* Set the properties of the image to those of the current frame */
-        pImage->dims[0].size = pFrame->Width;
-        pImage->dims[1].size = pFrame->Height;
         /* Convert from the PvApi data types to ADDataType */
         switch(pFrame->Format) {
             case ePvFmtMono8:
-            case ePvFmtBayer8:
-                dataType = NDUInt8;
+                pImage->colorMode = NDColorModeMono;
+                pImage->dataType = NDUInt8;
+                pImage->ndims = 2;
+                pImage->dims[0].size   = pFrame->Width;
+                pImage->dims[0].offset = pFrame->RegionX;
+                pImage->dims[1].size   = pFrame->Height;
+                pImage->dims[1].offset = pFrame->RegionY;
                 break;
             case ePvFmtMono16:
+                pImage->colorMode = NDColorModeMono;
+                pImage->dataType = NDUInt16;
+                pImage->ndims = 2;
+                pImage->dims[0].size   = pFrame->Width;
+                pImage->dims[0].offset = pFrame->RegionX;
+                pImage->dims[1].size   = pFrame->Height;
+                pImage->dims[1].offset = pFrame->RegionY;
+                break;
+            case ePvFmtBayer8:
+                pImage->colorMode = NDColorModeBayer;
+                pImage->dataType = NDUInt8;
+                pImage->ndims = 2;
+                pImage->dims[0].size   = pFrame->Width;
+                pImage->dims[0].offset = pFrame->RegionX;
+                pImage->dims[1].size   = pFrame->Height;
+                pImage->dims[1].offset = pFrame->RegionY;
+                break;
             case ePvFmtBayer16:
-                dataType = NDUInt16;
+                pImage->colorMode = NDColorModeBayer;
+                pImage->dataType = NDUInt16;
+                pImage->ndims = 2;
+                pImage->dims[0].size   = pFrame->Width;
+                pImage->dims[0].offset = pFrame->RegionX;
+                pImage->dims[1].size   = pFrame->Height;
+                pImage->dims[1].offset = pFrame->RegionY;
+                break;
+            case ePvFmtRgb24:
+                pImage->colorMode = NDColorModeRGB1;
+                pImage->dataType = NDUInt8;
+                pImage->ndims = 3;
+                pImage->dims[0].size   = 3;
+                pImage->dims[1].size   = pFrame->Width;
+                pImage->dims[1].offset = pFrame->RegionX;
+                pImage->dims[2].size   = pFrame->Height;
+                pImage->dims[2].offset = pFrame->RegionY;
+                break;
+            case ePvFmtRgb48:
+                pImage->colorMode = NDColorModeRGB1;
+                pImage->dataType = NDUInt16;
+                pImage->ndims = 3;
+                pImage->dims[0].size   = 3;
+                pImage->dims[1].size   = pFrame->Width;
+                pImage->dims[1].offset = pFrame->RegionX;
+                pImage->dims[2].size   = pFrame->Height;
+                pImage->dims[2].offset = pFrame->RegionY;
                 break;
             default:
-                /* Note, this is wrong it does not work for ePvFmtRgb48, which is 48 bits */
-                dataType = NDUInt32;
+                 /* We don't support other formats yet */
+                asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+                    "%s:%s: error unsupported pixel format %d\n", 
+                    driverName, functionName, pFrame->Format);
                 break;
         }
-        pImage->dataType = dataType;
+        
+        /* We need to set the offset, binning and reverse values for each dimension here WORK NEEDED */
         
         /* Set the uniqueId and time stamp */
         pImage->uniqueId = pFrame->FrameCount;
@@ -267,21 +315,21 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* See if acquisition is done */
         if (this->framesRemaining > 0) this->framesRemaining--;
         if (this->framesRemaining == 0) {
-            setIntegerParam(addr, ADAcquire, 0);
-            setIntegerParam(addr, ADStatus, ADStatusIdle);
+            setIntegerParam(ADAcquire, 0);
+            setIntegerParam(ADStatus, ADStatusIdle);
         }
 
         /* Update the frame counter */
-        getIntegerParam(addr, ADImageCounter, &imageCounter);
+        getIntegerParam(ADImageCounter, &imageCounter);
         imageCounter++;
-        setIntegerParam(addr, ADImageCounter, imageCounter);
+        setIntegerParam(ADImageCounter, imageCounter);
 
         /* If autoSave is set then save the image */
-        status = getIntegerParam(addr, ADAutoSave, &autoSave);
+        status = getIntegerParam(ADAutoSave, &autoSave);
         if (autoSave) status = writeFile();
 
         asynPrintIO(this->pasynUserSelf, ASYN_TRACEIO_DRIVER, 
-            (const char *)this->pArrays[addr]->pData, this->pArrays[addr]->dataSize,
+            (const char *)this->pArrays[0]->pData, this->pArrays[0]->dataSize,
             "%s:%s: frameId=%d, timeStamp=%f\n",
             driverName, functionName, pImage->uniqueId, pImage->timeStamp);
 
@@ -298,35 +346,60 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, 
             "%s:%s: ERROR, frame has error code %d\n",
             driverName, functionName, pFrame->Status);
-        getIntegerParam(addr, PSBadFrameCounter, &badFrameCounter);
+        getIntegerParam(PSBadFrameCounter, &badFrameCounter);
         badFrameCounter++;
-        setIntegerParam(addr, PSBadFrameCounter, badFrameCounter);
+        setIntegerParam(PSBadFrameCounter, badFrameCounter);
     }
 
     /* Update any changed parameters */
-    callParamCallbacks(addr, addr);
+    callParamCallbacks();
     
     /* Queue this frame to run again */
     status = PvCaptureQueueFrame(this->PvHandle, pFrame, frameCallbackC); 
     epicsMutexUnlock(this->mutexId);
 }
 
+asynStatus prosilica::setPixelFormat()
+{
+    int status = asynSuccess;
+    int colorMode, dataType;
+    static const char *functionName = "setPixelFormat";
+    char pixelFormat[20];
+
+    status |= getIntegerParam(ADColorMode, &colorMode);
+    status |= getIntegerParam(ADDataType, &dataType);
+    if      ((colorMode == NDColorModeMono)  && (dataType == NDUInt8))  strcpy(pixelFormat, "Mono8");
+    else if ((colorMode == NDColorModeMono)  && (dataType == NDUInt16)) strcpy(pixelFormat, "Mono16");
+    else if ((colorMode == NDColorModeRGB1)  && (dataType == NDUInt8))  strcpy(pixelFormat, "Rgb24");
+    else if ((colorMode == NDColorModeRGB1)  && (dataType == NDUInt16)) strcpy(pixelFormat, "Rgb48");
+    else if ((colorMode == NDColorModeBayer) && (dataType == NDUInt8))  strcpy(pixelFormat, "Bayer8");
+    else if ((colorMode == NDColorModeBayer) && (dataType == NDUInt16)) strcpy(pixelFormat, "Bayer16");
+    else {
+         /* We don't support other formats yet */
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+            "%s:%s: error unsupported data type %d and/or color mode %d\n", 
+            driverName, functionName, dataType, colorMode);
+        return(asynError);
+    }
+    status |= PvAttrEnumSet(this->PvHandle, "PixelFormat", pixelFormat);
+    return((asynStatus)status);
+}      
+
 asynStatus prosilica::setGeometry()
 {
     int status = asynSuccess;
-    int addr=0;
     int binX, binY, minY, minX, sizeX, sizeY;
     static const char *functionName = "setGeometry";
     
     /* Get all of the current geometry parameters from the parameter library */
-    status |= getIntegerParam(addr, ADBinX, &binX);
+    status |= getIntegerParam(ADBinX, &binX);
     if (binX < 1) binX = 1;
-    status |= getIntegerParam(addr, ADBinY, &binY);
+    status |= getIntegerParam(ADBinY, &binY);
     if (binY < 1) binY = 1;
-    status |= getIntegerParam(addr, ADMinX, &minX);
-    status |= getIntegerParam(addr, ADMinY, &minY);
-    status |= getIntegerParam(addr, ADSizeX, &sizeX);
-    status |= getIntegerParam(addr, ADSizeY, &sizeY);
+    status |= getIntegerParam(ADMinX, &minX);
+    status |= getIntegerParam(ADMinY, &minY);
+    status |= getIntegerParam(ADSizeX, &sizeX);
+    status |= getIntegerParam(ADSizeY, &sizeY);
     
     status |= PvAttrUint32Set(this->PvHandle, "BinningX", binX);
     status |= PvAttrUint32Set(this->PvHandle, "BinningY", binY);
@@ -344,7 +417,6 @@ asynStatus prosilica::setGeometry()
 asynStatus prosilica::getGeometry()
 {
     int status = asynSuccess;
-    int addr=0;
     tPvUint32 binX, binY, minY, minX, sizeX, sizeY;
     static const char *functionName = "setGeometry";
 
@@ -355,21 +427,21 @@ asynStatus prosilica::getGeometry()
     status |= PvAttrUint32Get(this->PvHandle, "Width",    &sizeX);
     status |= PvAttrUint32Get(this->PvHandle, "Height",   &sizeY);
     
-    status |= setIntegerParam(addr, ADBinX,  binX);
-    status |= setIntegerParam(addr, ADBinY,  binY);
-    status |= setIntegerParam(addr, ADMinX,  minX*binX);
-    status |= setIntegerParam(addr, ADMinY,  minY*binY);
-    status |= setIntegerParam(addr, ADSizeX, sizeX*binX);
-    status |= setIntegerParam(addr, ADSizeY, sizeY*binY);
+    status |= setIntegerParam(ADBinX,  binX);
+    status |= setIntegerParam(ADBinY,  binY);
+    status |= setIntegerParam(ADMinX,  minX*binX);
+    status |= setIntegerParam(ADMinY,  minY*binY);
+    status |= setIntegerParam(ADSizeX, sizeX*binX);
+    status |= setIntegerParam(ADSizeY, sizeY*binY);
 
-    status |= setIntegerParam(addr, ADBinX,  binX);
-    status |= setIntegerParam(addr, ADBinY,  binY);
-    status |= setIntegerParam(addr, ADMinX,  minX*binX);
-    status |= setIntegerParam(addr, ADMinY,  minY*binY);
-    status |= setIntegerParam(addr, ADSizeX, sizeX*binX);
-    status |= setIntegerParam(addr, ADSizeY, sizeY*binY);
-    status |= setIntegerParam(addr, ADImageSizeX, sizeX);
-    status |= setIntegerParam(addr, ADImageSizeY, sizeY);
+    status |= setIntegerParam(ADBinX,  binX);
+    status |= setIntegerParam(ADBinY,  binY);
+    status |= setIntegerParam(ADMinX,  minX*binX);
+    status |= setIntegerParam(ADMinY,  minY*binY);
+    status |= setIntegerParam(ADSizeX, sizeX*binX);
+    status |= setIntegerParam(ADSizeY, sizeY*binY);
+    status |= setIntegerParam(ADImageSizeX, sizeX);
+    status |= setIntegerParam(ADImageSizeY, sizeY);
     
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
@@ -381,7 +453,6 @@ asynStatus prosilica::readStats()
 {
     int status = asynSuccess;
     char buffer[50];
-    int addr=0;
     unsigned long nchars;
     tPvUint32 uval;
     float fval;
@@ -392,29 +463,29 @@ asynStatus prosilica::readStats()
         status = 0;
         strcpy(buffer, "Unsupported parameter");
     }
-    status |= setStringParam (addr,  PSStatDriverType, buffer);    
+    status |= setStringParam ( PSStatDriverType, buffer);    
     status |= PvAttrStringGet    (this->PvHandle, "StatFilterVersion", buffer, sizeof(buffer), &nchars);
     if (status == ePvErrNotFound) {
         status = 0;
         strcpy(buffer, "Unsupported parameter");
     }
-    status |= setStringParam (addr,  PSStatFilterVersion, buffer);
+    status |= setStringParam ( PSStatFilterVersion, buffer);
     status |= PvAttrFloat32Get   (this->PvHandle, "StatFrameRate", &fval);
-    status |= setDoubleParam (addr,  PSStatFrameRate, fval);
+    status |= setDoubleParam ( PSStatFrameRate, fval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatFramesCompleted", &uval);
-    status |= setIntegerParam(addr,  PSStatFramesCompleted, (int)uval);
+    status |= setIntegerParam( PSStatFramesCompleted, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatFramesDropped", &uval);
-    status |= setIntegerParam(addr,  PSStatFramesDropped, (int)uval);
+    status |= setIntegerParam( PSStatFramesDropped, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsErroneous", &uval);
-    status |= setIntegerParam(addr,  PSStatPacketsErroneous, (int)uval);
+    status |= setIntegerParam( PSStatPacketsErroneous, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsMissed", &uval);
-    status |= setIntegerParam(addr,  PSStatPacketsMissed, (int)uval);
+    status |= setIntegerParam( PSStatPacketsMissed, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsReceived", &uval);
-    status |= setIntegerParam(addr,  PSStatPacketsReceived, (int)uval);
+    status |= setIntegerParam( PSStatPacketsReceived, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsRequested", &uval);
-    status |= setIntegerParam(addr,  PSStatPacketsRequested, (int)uval);
+    status |= setIntegerParam( PSStatPacketsRequested, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsResent", &uval);
-    status |= setIntegerParam(addr,  PSStatPacketsResent, (int)uval);
+    status |= setIntegerParam( PSStatPacketsResent, (int)uval);
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
                       driverName, functionName, status);
@@ -425,27 +496,55 @@ asynStatus prosilica::readParameters()
 {
     int status = asynSuccess;
     tPvUint32 intVal;
+    int dataType=NDUInt8, colorMode=NDColorModeMono;
     tPvFloat32 fltVal;
-    int addr=0;
     double dval;
     unsigned long nchars;
     char buffer[20];
     static const char *functionName = "setGeometry";
 
     status |= PvAttrUint32Get(this->PvHandle, "TotalBytesPerFrame", &intVal);
-    setIntegerParam(addr, ADImageSize, intVal);
+    setIntegerParam(ADImageSize, intVal);
 
     intVal = -1;
     status |= PvAttrEnumGet(this->PvHandle, "PixelFormat", buffer, sizeof(buffer), &nchars);
-    if (!strcmp(buffer, "Mono8")) intVal = NDUInt8;
-    else if (!strcmp(buffer, "Mono16")) intVal = NDUInt16;
-    /* We don't support color modes yet */
-    status |= setIntegerParam(addr, ADDataType, intVal);
+    if      (!strcmp(buffer, "Mono8")) {
+        dataType = NDUInt8;
+        colorMode = NDColorModeMono;
+    }
+    else if (!strcmp(buffer, "Mono16")) {
+        dataType = NDUInt16;
+        colorMode = NDColorModeMono;
+    }
+    else if (!strcmp(buffer, "Rgb24")) {
+        dataType = NDUInt8;
+        colorMode = NDColorModeRGB1;
+    }
+    else if (!strcmp(buffer, "Rgb48")) {
+        dataType = NDUInt16;
+        colorMode = NDColorModeRGB1;
+    }
+    else if (!strcmp(buffer, "Bayer8")) {
+        dataType = NDUInt8;
+        colorMode = NDColorModeBayer;
+    }
+    else if (!strcmp(buffer, "Bayer16")) { 
+        dataType = NDUInt16;
+        colorMode = NDColorModeBayer;
+    }
+    else {
+         /* We don't support other formats yet */
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+            "%s:%s: error unsupported data type %d and/or color mode %d\n", 
+            driverName, functionName, dataType, colorMode);
+    }
+    status |= setIntegerParam(ADDataType, dataType);
+    status |= setIntegerParam(ADColorMode, colorMode);
     
     status |= getGeometry();
 
     status |= PvAttrUint32Get(this->PvHandle, "AcquisitionFrameCount", &intVal);
-    status |= setIntegerParam(addr, ADNumImages, intVal);
+    status |= setIntegerParam(ADNumImages, intVal);
 
     status |= PvAttrEnumGet(this->PvHandle, "AcquisitionMode", buffer, sizeof(buffer), &nchars);
     if      (!strcmp(buffer, "SingleFrame")) intVal = ADImageSingle;
@@ -453,41 +552,41 @@ asynStatus prosilica::readParameters()
     else if (!strcmp(buffer, "Recorder"))    intVal = ADImageMultiple;
     else if (!strcmp(buffer, "Continuous"))  intVal = ADImageContinuous;
     else {intVal=0; status |= asynError;}
-    status |= setIntegerParam(addr, ADImageMode, intVal);
+    status |= setIntegerParam(ADImageMode, intVal);
 
     status |= PvAttrEnumGet(this->PvHandle, "FrameStartTriggerMode", buffer, sizeof(buffer), &nchars);
     for (intVal=0; intVal<NUM_START_TRIGGER_MODES; intVal++) {
         if (strcmp(buffer, PSTriggerStartStrings[intVal]) == 0) {
-            status |= setIntegerParam(addr, ADTriggerMode, intVal);
+            status |= setIntegerParam(ADTriggerMode, intVal);
             break;
         }
     }
     if (intVal == NUM_START_TRIGGER_MODES) {
-        status |= setIntegerParam(addr, ADTriggerMode, 0);
+        status |= setIntegerParam(ADTriggerMode, 0);
         status |= asynError;
     }
     
     /* Prosilica does not support more than 1 exposure per frame */
-    status |= setIntegerParam(addr, ADNumExposures, 1);
+    status |= setIntegerParam(ADNumExposures, 1);
 
     /* Prosilica uses integer microseconds */
     status |= PvAttrUint32Get(this->PvHandle, "ExposureValue", &intVal);
     dval = intVal / 1.e6;
-    status |= setDoubleParam(addr, ADAcquireTime, dval);
+    status |= setDoubleParam(ADAcquireTime, dval);
 
     /* Prosilica uses a frame rate in Hz */
     status |= PvAttrFloat32Get(this->PvHandle, "FrameRate", &fltVal);
     if (fltVal == 0.) fltVal = 1;
     dval = 1. / fltVal;
-    status |= setDoubleParam(addr, ADAcquirePeriod, dval);
+    status |= setDoubleParam(ADAcquirePeriod, dval);
 
     /* Prosilica uses an integer value */
     status |= PvAttrUint32Get(this->PvHandle, "GainValue", &intVal);
     dval = intVal;
-    status |= setDoubleParam(addr, ADGain, dval);
+    status |= setDoubleParam(ADGain, dval);
 
     /* Call the callbacks to update the values in higher layers */
-    callParamCallbacks(addr, addr);
+    callParamCallbacks();
     
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
@@ -533,7 +632,6 @@ asynStatus prosilica::connectCamera()
     unsigned long nchars;
     tPvFrame *pFrame;
     int i;
-    int addr=0;
     int ndims, dims[2];
     int bytesPerPixel;
     NDArray *pImage;
@@ -637,16 +735,16 @@ asynStatus prosilica::connectCamera()
     }
 
     /* Set some initial values for other parameters */
-    status =  setStringParam (addr, ADManufacturer, "Prosilica");
-    status |= setStringParam (addr, ADModel, this->PvCameraInfo.DisplayName);
-    status |= setIntegerParam(addr, ADSizeX, this->sensorWidth);
-    status |= setIntegerParam(addr, ADSizeY, this->sensorHeight);
-    status |= setIntegerParam(addr, ADMaxSizeX, this->sensorWidth);
-    status |= setIntegerParam(addr, ADMaxSizeY, this->sensorHeight);
-    status |= setIntegerParam(addr, PSBadFrameCounter, 0);
+    status =  setStringParam (ADManufacturer, "Prosilica");
+    status |= setStringParam (ADModel, this->PvCameraInfo.DisplayName);
+    status |= setIntegerParam(ADSizeX, this->sensorWidth);
+    status |= setIntegerParam(ADSizeY, this->sensorHeight);
+    status |= setIntegerParam(ADMaxSizeX, this->sensorWidth);
+    status |= setIntegerParam(ADMaxSizeY, this->sensorHeight);
+    status |= setIntegerParam(PSBadFrameCounter, 0);
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s unable to set camera parameters on camera %d\n",
+              "%s:%s: unable to set camera parameters on camera %d\n",
               driverName, functionName, this->uniqueId);
         return asynError;
     }
@@ -669,12 +767,11 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
 {
     int function = pasynUser->reason;
     int status = asynSuccess;
-    int addr=0;
-    const char *functionName = "writeInt32";
+    static const char *functionName = "writeInt32";
 
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
-    status |= setIntegerParam(addr, function, value);
+    status |= setIntegerParam(function, value);
 
     switch (function) {
         case ADBinX:
@@ -710,8 +807,8 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
                    many frames have been requested.  If we are in continuous mode then set the number of
                    remaining frames to -1. */
                 int imageMode, numImages;
-                status |= getIntegerParam(addr, ADImageMode, &imageMode);
-                status |= getIntegerParam(addr, ADNumImages, &numImages);
+                status |= getIntegerParam(ADImageMode, &imageMode);
+                status |= getIntegerParam(ADNumImages, &numImages);
                 switch(imageMode) {
                 case ADImageSingle:
                     this->framesRemaining = 1;
@@ -723,10 +820,10 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
                     this->framesRemaining = -1;
                     break;
                 }
-                setIntegerParam(addr, ADStatus, ADStatusAcquire);
+                setIntegerParam(ADStatus, ADStatusAcquire);
                 status |= PvCommandRun(this->PvHandle, "AcquisitionStart");
             } else {
-                setIntegerParam(addr, ADStatus, ADStatusIdle);
+                setIntegerParam(ADStatus, ADStatusIdle);
                 status |= PvCommandRun(this->PvHandle, "AcquisitionAbort");
             }
             break;
@@ -745,23 +842,9 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
             status = writeFile();
             break;
         case ADDataType:
-            switch (value) {
-                case NDInt8:
-                case NDUInt8:
-                    status |= PvAttrEnumSet(this->PvHandle, "PixelFormat", "Mono8");
-                    break;
-                case NDInt16:
-                case NDUInt16:
-                    status |= PvAttrEnumSet(this->PvHandle, "PixelFormat", "Mono16");
-                    break;
-                /* We don't support other formats yet */
-                default:
-                    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-                        "%s:%s: error unsupported data type %d\n", 
-                        driverName, functionName, value);
-                    status |= asynError;
-                    break;
-            }      
+        case ADColorMode:
+            status = setPixelFormat();
+            break;
     }
     
     /* Read the camera parameters and do callbacks */
@@ -780,14 +863,14 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
 asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
     int function = pasynUser->reason;
-    int addr=0;
     int status = asynSuccess;
     tPvUint32 intVal;
     tPvFloat32 fltVal;
+    static const char *functionName = "writeFloat64";
 
-   /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
+    /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
-    status |= setDoubleParam(addr, function, value);
+    status |= setDoubleParam(function, value);
 
     switch (function) {
     case ADAcquireTime:
@@ -814,12 +897,12 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     status |= readParameters();
     if (status) 
         asynPrint(pasynUser, ASYN_TRACE_ERROR, 
-              "%s:writeFloat64 error, status=%d function=%d, value=%f\n", 
-              driverName, status, function, value);
+              "%s:%s: error, status=%d function=%d, value=%f\n", 
+              driverName, functionName, status, function, value);
     else        
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
-              "%s:writeFloat64: function=%d, value=%f\n", 
-              driverName, function, value);
+              "%s:%s: function=%d, value=%f\n", 
+              driverName, functionName, function, value);
     return((asynStatus)status);
 }
 
@@ -831,7 +914,7 @@ asynStatus prosilica::drvUserCreate(asynUser *pasynUser,
 {
     asynStatus status;
     int param;
-    const char *functionName = "drvUserCreate";
+    static const char *functionName = "drvUserCreate";
 
     /* See if this is one of this drivers' parameters */
     status = findParam(PSDetParamString, NUM_PS_DET_PARAMS, 
