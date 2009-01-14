@@ -6,7 +6,7 @@ include $(TOP)/configure/CONFIG
 
 # The files in this directory are installed first because they are
 # used both by the NDPluginColorConvert and by the Prosilica driver
-INC += PvApi.h
+INC += PvApi.h ImageLib.h
 
 # Note, the following files were manually copied from the Prosilica GigESDK/bin-pc directory
 # to this directory after building
