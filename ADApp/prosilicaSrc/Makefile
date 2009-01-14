@@ -12,7 +12,7 @@ LIBRARY_IOC_WIN32 += prosilica
 LIBRARY_IOC_Linux += prosilica
 LIB_SRCS += prosilica.cpp
 LIB_SRCS += drvProsilicaEpics.c
-LIB_LIBS += NDPlugin NDPluginColorConvert ADBase netCDF
+LIB_LIBS += NDPluginColorConvert NDPlugin ADBase netCDF
 LIB_LIBS += PvAPI ImageLib
 LIB_LIBS += calc sscan autosave
 LIB_LIBS += asyn
@@ -32,8 +32,8 @@ prosilicaApp_SRCS_vxWorks += prosilicaApp_registerRecordDeviceDriver.cpp
 
 # Add locally compiled object code
 prosilicaApp_LIBS += prosilica
+prosilicaApp_LIBS += NDPluginColorConvert NDPlugin ADBase netCDF
 prosilicaApp_LIBS += PvAPI ImageLib
-prosilicaApp_LIBS += NDPlugin NDPluginColorConvert ADBase netCDF
 prosilicaApp_LIBS += calc sscan autosave 
 prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
