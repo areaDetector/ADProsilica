@@ -7,9 +7,6 @@ include $(TOP)/configure/CONFIG
 #USR_CFLAGS += 
 USR_CXXFLAGS_Linux += -D_LINUX -D_x86
 
-# We install PvApi.h because the NDPluginColorConvert uses it for Bayer to RGB color conversion
-INC += PvApi.h
-
 LIBRARY_IOC_WIN32 += prosilica
 #LIBRARY_IOC_cygwin32 += prosilica
 LIBRARY_IOC_Linux += prosilica
@@ -20,14 +17,6 @@ LIB_LIBS += PvAPI ImageLib
 LIB_LIBS += calc sscan autosave
 LIB_LIBS += asyn
 LIB_LIBS += $(EPICS_BASE_IOC_LIBS)
-
-# Note, the following files were manually copied from the Prosilica GigESDK/bin-pc directory
-# to this directory after building with Visual Basic .NET 2003.
-BIN_INSTALLS_WIN32    += ../PvAPI.dll
-BIN_INSTALLS_cygwin32 += ../PvAPI.dll
-LIB_INSTALLS_WIN32    += ../PvAPI.lib ../ImageLib.lib
-LIB_INSTALLS_cygwin32 += ../PvAPI.lib ../ImageLib.lib
-LIB_INSTALLS_linux    += ../libPvAPI.a ../libImageLib.a
 
 #==================================
 PROD_IOC_WIN32 += prosilicaApp
