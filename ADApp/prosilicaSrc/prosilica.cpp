@@ -39,8 +39,7 @@ static int PvApiInitialized;
 
 #define MAX_FRAMES  2  /* Number of frame buffers for PvApi */
 #define MAX_PACKET_SIZE 8228
-
-
+                                      
 class prosilica : public ADDriver {
 public:
     prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory);
@@ -93,43 +92,116 @@ typedef enum {
     PSTriggerStartSoftware
 } PSTriggerStartMode_t;
 
-static const char *PSTriggerStartStrings[] = {
-    "Freerun","SyncIn1","SyncIn2","SyncIn3","SyncIn4","FixedRate","Software"
+static const char *PSTriggerStartModes[] = {
+    "Freerun",
+    "SyncIn1",
+    "SyncIn2",
+    "SyncIn3",
+    "SyncIn4",
+    "FixedRate",
+    "Software"
 };
+#define NUM_START_TRIGGER_MODES (int)(sizeof(PSTriggerStartModes) / sizeof(PSTriggerStartModes[0]))
+
+static const char *PSSyncOutModes[] = {
+    "GPO",
+    "AcquisitionTriggerReady",
+    "FrameTriggerReady",
+    "FrameTrigger",
+    "Exposing",
+    "FrameReadout",
+    "Imaging",
+    "Acquiring",
+    "SyncIn1",
+    "SyncIn2",
+    "SyncIn3",
+    "SyncIn4",
+    "Strobe1",
+    "Strobe2",
+    "Strobe3",
+    "Strobe4"
+};
+#define NUM_SYNC_OUT_MODES (int)(sizeof(PSSyncOutModes) / sizeof(PSSyncOutModes[0]))
+
+static const char *PSStrobeModes[] = {
+    "AcquisitionTriggerReady",
+    "FrameTriggerReady",
+    "FrameTrigger",
+    "Exposing",
+    "FrameReadout",
+    "Acquiring",
+    "SyncIn1",
+    "SyncIn2",
+    "SyncIn3",
+    "SyncIn4",
+};
+#define NUM_STROBE_MODES (int)(sizeof(PSStrobeModes) / sizeof(PSStrobeModes[0]))
+     
  
-#define NUM_START_TRIGGER_MODES (int)(sizeof(PSTriggerStartStrings) / sizeof(PSTriggerStartStrings[0]))
 
 typedef enum {
-    /* These parameters are for the camera statistics */
-    PSReadStatistics 
+    /* These parameters are specific to the Prosilica camera */
+    /*    Name               asyn interface  access   Description  */
+    PSReadStatistics        /* (asynInt32,    r/w) Write to read statistics  */ 
         = ADFirstDriverParam,
-    PSStatDriverType,
-    PSStatFilterVersion,
-    PSStatFrameRate,
-    PSStatFramesCompleted,
-    PSStatFramesDropped,
-    PSStatPacketsErroneous,
-    PSStatPacketsMissed,
-    PSStatPacketsReceived,
-    PSStatPacketsRequested,
-    PSStatPacketsResent,
-    PSBadFrameCounter,
+    PSDriverType,           /* (asynOctet,    r/o) Ethernet driver type */ 
+    PSFilterVersion,        /* (asynOctet,    r/o) Ethernet packet filter version */ 
+    PSFrameRate,            /* (asynFloat64,  r/o) Frame rate */ 
+    PSFramesCompleted,      /* (asynInt32,    r/o) Frames completed */ 
+    PSFramesDropped,        /* (asynInt32,    r/o) Frames dropped */ 
+    PSPacketsErroneous,     /* (asynInt32,    r/o) Erroneous packets */ 
+    PSPacketsMissed,        /* (asynInt32,    r/o) Missed packets */ 
+    PSPacketsReceived,      /* (asynInt32,    r/o) Packets received */ 
+    PSPacketsRequested,     /* (asynInt32,    r/o) Packets requested */ 
+    PSPacketsResent,        /* (asynInt32,    r/o) Packets resent */
+    PSBadFrameCounter,      /* (asynInt32,    r/o) Bad frame counter */
+    PSSyncIn1Level,         /* (asynInt32,    r/o) Sync input 1 level */
+    PSSyncIn2Level,         /* (asynInt32,    r/o) Sync input 2 level */
+    PSSyncOut1Mode,         /* (asynInt32,    r/w) Sync output 1 mode */
+    PSSyncOut1Level,        /* (asynInt32,    r/w) Sync output 1 level */
+    PSSyncOut1Invert,       /* (asynInt32,    r/w) Sync output 1 invert */
+    PSSyncOut2Mode,         /* (asynInt32,    r/w) Sync output 2 mode */
+    PSSyncOut2Level,        /* (asynInt32,    r/w) Sync output 2 level */
+    PSSyncOut2Invert,       /* (asynInt32,    r/w) Sync output 2 invert */
+    PSSyncOut3Mode,         /* (asynInt32,    r/w) Sync output 3 mode */
+    PSSyncOut3Level,        /* (asynInt32,    r/w) Sync output 3 level */
+    PSSyncOut3Invert,       /* (asynInt32,    r/w) Sync output 3 invert */
+    PSStrobe1Mode,          /* (asynInt32,    r/w) Strobe 1 mode */
+    PSStrobe1Delay,         /* (asynFloat64,  r/w) Strobe 1 delay */
+    PSStrobe1CtlDuration,   /* (asynInt32,    r/w) Strobe 1 controlled duration */
+    PSStrobe1Duration,      /* (asynFloat64,  r/w) Strobe 1 duration */
     ADLastDriverParam
 } PSDetParam_t;
 
 static asynParamString_t PSDetParamString[] = {
     {PSReadStatistics,        "PS_READ_STATISTICS"},
-    {PSStatDriverType,        "PS_DRIVER_TYPE"},
-    {PSStatFilterVersion,     "PS_FILTER_VERSION"},
-    {PSStatFrameRate,         "PS_FRAME_RATE"},
-    {PSStatFramesCompleted,   "PS_FRAMES_COMPLETED"},
-    {PSStatFramesDropped,     "PS_FRAMES_DROPPED"},
-    {PSStatPacketsErroneous,  "PS_PACKETS_ERRONEOUS"},
-    {PSStatPacketsMissed,     "PS_PACKETS_MISSED"},
-    {PSStatPacketsReceived,   "PS_PACKETS_RECEIVED"},
-    {PSStatPacketsRequested,  "PS_PACKETS_REQUESTED"},
-    {PSStatPacketsResent,     "PS_PACKETS_RESENT"},
-    {PSBadFrameCounter,       "PS_BAD_FRAME_COUNTER"}
+    {PSDriverType,            "PS_DRIVER_TYPE"},
+    {PSFilterVersion,         "PS_FILTER_VERSION"},
+    {PSFrameRate,             "PS_FRAME_RATE"},
+    {PSFramesCompleted,       "PS_FRAMES_COMPLETED"},
+    {PSFramesDropped,         "PS_FRAMES_DROPPED"},
+    {PSPacketsErroneous,      "PS_PACKETS_ERRONEOUS"},
+    {PSPacketsMissed,         "PS_PACKETS_MISSED"},
+    {PSPacketsReceived,       "PS_PACKETS_RECEIVED"},
+    {PSPacketsRequested,      "PS_PACKETS_REQUESTED"},
+    {PSPacketsResent,         "PS_PACKETS_RESENT"},
+    {PSBadFrameCounter,       "PS_BAD_FRAME_COUNTER"},
+    {PSSyncIn1Level,          "PS_SYNC_IN_1_LEVEL"},
+    {PSSyncIn2Level,          "PS_SYNC_IN_2_LEVEL"},
+    {PSSyncOut1Mode,          "PS_SYNC_OUT_1_MODE"},
+    {PSSyncOut1Level,         "PS_SYNC_OUT_1_LEVEL"},
+    {PSSyncOut1Invert,        "PS_SYNC_OUT_1_INVERT"},
+    {PSSyncOut2Mode,          "PS_SYNC_OUT_2_MODE"},
+    {PSSyncOut2Level,         "PS_SYNC_OUT_2_LEVEL"},
+    {PSSyncOut2Invert,        "PS_SYNC_OUT_2_INVERT"},
+    {PSSyncOut3Mode,          "PS_SYNC_OUT_3_MODE"},
+    {PSSyncOut3Level,         "PS_SYNC_OUT_3_LEVEL"},
+    {PSSyncOut3Invert,        "PS_SYNC_OUT_3_INVERT"},
+    {PSStrobe1Mode,           "PS_STROBE_1_MODE"},
+    {PSStrobe1Delay,          "PS_STROBE_1_DELAY"},
+    {PSStrobe1CtlDuration,    "PS_STROBE_1_CTL_DURATION"},
+    {PSStrobe1Duration,       "PS_STROBE_1_DURATION"},
+
 };
 
 #define NUM_PS_DET_PARAMS (sizeof(PSDetParamString)/sizeof(PSDetParamString[0]))
@@ -455,6 +527,7 @@ asynStatus prosilica::readStats()
     char buffer[50];
     unsigned long nchars;
     tPvUint32 uval;
+    int i;
     float fval;
     static const char *functionName = "readStats";
     
@@ -463,39 +536,142 @@ asynStatus prosilica::readStats()
         status = 0;
         strcpy(buffer, "Unsupported parameter");
     }
-    status |= setStringParam ( PSStatDriverType, buffer);    
+    status |= setStringParam ( PSDriverType, buffer);    
     status |= PvAttrStringGet    (this->PvHandle, "StatFilterVersion", buffer, sizeof(buffer), &nchars);
     if (status == ePvErrNotFound) {
         status = 0;
         strcpy(buffer, "Unsupported parameter");
     }
-    status |= setStringParam ( PSStatFilterVersion, buffer);
+    status |= setStringParam ( PSFilterVersion, buffer);
     status |= PvAttrFloat32Get   (this->PvHandle, "StatFrameRate", &fval);
-    status |= setDoubleParam ( PSStatFrameRate, fval);
+    status |= setDoubleParam ( PSFrameRate, fval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatFramesCompleted", &uval);
-    status |= setIntegerParam( PSStatFramesCompleted, (int)uval);
+    status |= setIntegerParam( PSFramesCompleted, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatFramesDropped", &uval);
-    status |= setIntegerParam( PSStatFramesDropped, (int)uval);
+    status |= setIntegerParam( PSFramesDropped, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsErroneous", &uval);
-    status |= setIntegerParam( PSStatPacketsErroneous, (int)uval);
+    status |= setIntegerParam( PSPacketsErroneous, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsMissed", &uval);
-    status |= setIntegerParam( PSStatPacketsMissed, (int)uval);
+    status |= setIntegerParam( PSPacketsMissed, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsReceived", &uval);
-    status |= setIntegerParam( PSStatPacketsReceived, (int)uval);
+    status |= setIntegerParam( PSPacketsReceived, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsRequested", &uval);
-    status |= setIntegerParam( PSStatPacketsRequested, (int)uval);
+    status |= setIntegerParam( PSPacketsRequested, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsResent", &uval);
-    status |= setIntegerParam( PSStatPacketsResent, (int)uval);
+    status |= setIntegerParam( PSPacketsResent, (int)uval);
+    status |= PvAttrUint32Get    (this->PvHandle, "SyncInLevels", &uval);
+    status |= setIntegerParam( PSSyncIn1Level, uval&0x01 ? 1:0);
+    status |= setIntegerParam( PSSyncIn2Level, uval&0x02 ? 1:0);
+    status |= PvAttrUint32Get    (this->PvHandle, "SyncOutGpoLevels", &uval);
+    status |= setIntegerParam( PSSyncOut1Level, uval&0x01 ? 1:0);
+    status |= setIntegerParam( PSSyncOut2Level, uval&0x02 ? 1:0);
+    status |= setIntegerParam( PSSyncOut3Level, uval&0x04 ? 1:0);
+    status |= PvAttrEnumGet(this->PvHandle, "SyncOut1Mode", buffer, sizeof(buffer), &nchars);
+    for (i=0; i<NUM_SYNC_OUT_MODES; i++) {
+        if (strcmp(buffer, PSSyncOutModes[i]) == 0) {
+            status |= setIntegerParam(PSSyncOut1Mode, i);
+            break;
+        }
+    }
+    if (i == NUM_SYNC_OUT_MODES) {
+        status |= setIntegerParam(PSSyncOut1Mode, 0);
+        status |= asynError;
+    }
+    status |= PvAttrEnumGet(this->PvHandle, "SyncOut2Mode", buffer, sizeof(buffer), &nchars);
+    for (i=0; i<NUM_SYNC_OUT_MODES; i++) {
+        if (strcmp(buffer, PSSyncOutModes[i]) == 0) {
+            status |= setIntegerParam(PSSyncOut2Mode, i);
+            break;
+        }
+    }
+    if (i == NUM_SYNC_OUT_MODES) {
+        status |= setIntegerParam(PSSyncOut2Mode, 0);
+        status |= asynError;
+    }
+    status |= PvAttrEnumGet(this->PvHandle, "SyncOut3Mode", buffer, sizeof(buffer), &nchars);
+    /* This parameter can be not supported */
+    if (status == ePvErrNotFound) {
+        status = 0;
+        status |= setIntegerParam(PSSyncOut3Mode, 0);
+    } else {
+        for (i=0; i<NUM_SYNC_OUT_MODES; i++) {
+            if (strcmp(buffer, PSSyncOutModes[i]) == 0) {
+                status |= setIntegerParam(PSSyncOut3Mode, i);
+                break;
+            }
+        }
+    }
+    if (i == NUM_SYNC_OUT_MODES) {
+        status |= setIntegerParam(PSSyncOut3Mode, 0);
+        status |= asynError;
+    }
+    
+    status |= PvAttrEnumGet(this->PvHandle, "SyncOut1Invert", buffer, sizeof(buffer), &nchars);
+    if (strcmp(buffer, "Off") == 0) i = 0;
+    else if (strcmp(buffer, "On") == 0) i = 1;
+    else {
+        i=0;
+        status |= asynError;
+    }
+    status |= setIntegerParam( PSSyncOut1Invert, i);
+    status |= PvAttrEnumGet(this->PvHandle, "SyncOut2Invert", buffer, sizeof(buffer), &nchars);
+    if (strcmp(buffer, "Off") == 0) i = 0;
+    else if (strcmp(buffer, "On") == 0) i = 1;
+    else {
+        i=0;
+        status |= asynError;
+    }
+    status |= setIntegerParam( PSSyncOut2Invert, i);
+    status |= PvAttrEnumGet(this->PvHandle, "SyncOut3Invert", buffer, sizeof(buffer), &nchars);
+    if (status == ePvErrNotFound) {
+        status = 0;
+        i=0;
+    } else {
+        if (strcmp(buffer, "Off") == 0) i = 0;
+        else if (strcmp(buffer, "On") == 0) i = 1;
+        else {
+            i=0;
+            status |= asynError;
+        }
+    }
+    status |= setIntegerParam( PSSyncOut3Invert, i);
+
+    status |= PvAttrEnumGet(this->PvHandle, "Strobe1Mode", buffer, sizeof(buffer), &nchars);
+    for (i=0; i<NUM_STROBE_MODES; i++) {
+        if (strcmp(buffer, PSStrobeModes[i]) == 0) {
+            status |= setIntegerParam(PSStrobe1Mode, i);
+            break;
+        }
+    }
+    if (i == NUM_STROBE_MODES) {
+        status |= setIntegerParam(PSStrobe1Mode, 0);
+        status |= asynError;
+    }
+    status |= PvAttrEnumGet(this->PvHandle, "Strobe1ControlledDuration", buffer, sizeof(buffer), &nchars);
+    if (strcmp(buffer, "Off") == 0) i = 0;
+    else if (strcmp(buffer, "On") == 0) i = 1;
+    else {
+        i=0;
+        status |= asynError;
+    }
+    status |= setIntegerParam( PSStrobe1CtlDuration, i);
+
+    status |= PvAttrUint32Get    (this->PvHandle, "Strobe1Delay", &uval);
+    status |= setDoubleParam( PSStrobe1Delay, uval/1.e6);
+    status |= PvAttrUint32Get    (this->PvHandle, "Strobe1Duration", &uval);
+    status |= setDoubleParam( PSStrobe1Duration, uval/1.e6);
+
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
                       driverName, functionName, status);
-    return((asynStatus)status);
+    return(asynSuccess);
 }
 
 asynStatus prosilica::readParameters()
 {
     int status = asynSuccess;
     tPvUint32 intVal;
+    int i;
     int dataType=NDUInt8, colorMode=NDColorModeMono;
     tPvFloat32 fltVal;
     double dval;
@@ -506,7 +682,6 @@ asynStatus prosilica::readParameters()
     status |= PvAttrUint32Get(this->PvHandle, "TotalBytesPerFrame", &intVal);
     setIntegerParam(ADImageSize, intVal);
 
-    intVal = -1;
     status |= PvAttrEnumGet(this->PvHandle, "PixelFormat", buffer, sizeof(buffer), &nchars);
     if      (!strcmp(buffer, "Mono8")) {
         dataType = NDUInt8;
@@ -547,21 +722,21 @@ asynStatus prosilica::readParameters()
     status |= setIntegerParam(ADNumImages, intVal);
 
     status |= PvAttrEnumGet(this->PvHandle, "AcquisitionMode", buffer, sizeof(buffer), &nchars);
-    if      (!strcmp(buffer, "SingleFrame")) intVal = ADImageSingle;
-    else if (!strcmp(buffer, "MultiFrame"))  intVal = ADImageMultiple;
-    else if (!strcmp(buffer, "Recorder"))    intVal = ADImageMultiple;
-    else if (!strcmp(buffer, "Continuous"))  intVal = ADImageContinuous;
-    else {intVal=0; status |= asynError;}
-    status |= setIntegerParam(ADImageMode, intVal);
+    if      (!strcmp(buffer, "SingleFrame")) i = ADImageSingle;
+    else if (!strcmp(buffer, "MultiFrame"))  i = ADImageMultiple;
+    else if (!strcmp(buffer, "Recorder"))    i = ADImageMultiple;
+    else if (!strcmp(buffer, "Continuous"))  i = ADImageContinuous;
+    else {i=0; status |= asynError;}
+    status |= setIntegerParam(ADImageMode, i);
 
     status |= PvAttrEnumGet(this->PvHandle, "FrameStartTriggerMode", buffer, sizeof(buffer), &nchars);
-    for (intVal=0; intVal<NUM_START_TRIGGER_MODES; intVal++) {
-        if (strcmp(buffer, PSTriggerStartStrings[intVal]) == 0) {
-            status |= setIntegerParam(ADTriggerMode, intVal);
+    for (i=0; i<NUM_START_TRIGGER_MODES; i++) {
+        if (strcmp(buffer, PSTriggerStartModes[i]) == 0) {
+            status |= setIntegerParam(ADTriggerMode, i);
             break;
         }
     }
-    if (intVal == NUM_START_TRIGGER_MODES) {
+    if (i == NUM_START_TRIGGER_MODES) {
         status |= setIntegerParam(ADTriggerMode, 0);
         status |= asynError;
     }
@@ -767,6 +942,7 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
 {
     int function = pasynUser->reason;
     int status = asynSuccess;
+    tPvUint32 syncs;
     static const char *functionName = "writeInt32";
 
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
@@ -833,10 +1009,51 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
                 break;
             }
             status |= PvAttrEnumSet(this->PvHandle, "FrameStartTriggerMode", 
-                                    PSTriggerStartStrings[value]);
+                                    PSTriggerStartModes[value]);
             break;
         case PSReadStatistics:
             readStats();
+            break;
+        case PSSyncOut1Mode:
+            status |= PvAttrEnumSet(this->PvHandle, "SyncOut1Mode", PSSyncOutModes[value]);
+            break;
+        case PSSyncOut2Mode:
+            status |= PvAttrEnumSet(this->PvHandle, "SyncOut2Mode", PSSyncOutModes[value]);
+            break;
+        case PSSyncOut3Mode:
+            status |= PvAttrEnumSet(this->PvHandle, "SyncOut3Mode", PSSyncOutModes[value]);
+            if (status == ePvErrNotFound) status = 0;
+            break;
+        case PSSyncOut1Level:
+            status |= PvAttrUint32Get(this->PvHandle, "SyncOutGpoLevels", &syncs);
+            syncs = (syncs & ~0x01) | ((value<<0) & 0x01);
+            status |= PvAttrUint32Set(this->PvHandle, "SyncOutGpoLevels", syncs);
+            break;
+        case PSSyncOut2Level:
+            status |= PvAttrUint32Get(this->PvHandle, "SyncOutGpoLevels", &syncs);
+            syncs = (syncs & ~0x02) | ((value<<1) & 0x02);
+            status |= PvAttrUint32Set(this->PvHandle, "SyncOutGpoLevels", syncs);
+            break;
+        case PSSyncOut3Level:
+            status |= PvAttrUint32Get(this->PvHandle, "SyncOutGpoLevels", &syncs);
+            syncs = (syncs & ~0x04) | ((value<<2) & 0x04);
+            status |= PvAttrUint32Set(this->PvHandle, "SyncOutGpoLevels", syncs);
+            break;
+        case PSSyncOut1Invert:
+            status |= PvAttrEnumSet(this->PvHandle, "SyncOut1Invert", value ? "On":"Off");
+            break;
+        case PSSyncOut2Invert:
+            status |= PvAttrEnumSet(this->PvHandle, "SyncOut2Invert", value ? "On":"Off");
+            break;
+        case PSSyncOut3Invert:
+            status |= PvAttrEnumSet(this->PvHandle, "SyncOut3Invert", value ? "On":"Off");
+            if (status == ePvErrNotFound) status = 0;
+            break;
+        case PSStrobe1Mode:
+            status |= PvAttrEnumSet(this->PvHandle, "Strobe1Mode", PSStrobeModes[value]);
+            break;
+        case PSStrobe1CtlDuration:
+            status |= PvAttrEnumSet(this->PvHandle, "Strobe1ControlledDuration", value ? "On":"Off");
             break;
         case ADWriteFile:
             status = writeFile();
@@ -864,8 +1081,6 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
     int function = pasynUser->reason;
     int status = asynSuccess;
-    tPvUint32 intVal;
-    tPvFloat32 fltVal;
     static const char *functionName = "writeFloat64";
 
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
@@ -873,24 +1088,29 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     status |= setDoubleParam(function, value);
 
     switch (function) {
-    case ADAcquireTime:
-        /* Prosilica uses integer microseconds */
-        intVal = (tPvUint32) (value * 1e6);
-        status |= PvAttrUint32Set(this->PvHandle, "ExposureValue", intVal);
-        break;
-    case ADAcquirePeriod:
-        /* Prosilica uses a frame rate in Hz */
-        if (value == 0.) value = .01;
-        fltVal = (tPvFloat32) (1. / value);
-        status |= PvAttrFloat32Set(this->PvHandle, "FrameRate", fltVal);
-        break;
-    case ADGain:
-        /* Prosilica uses an integer value */
-        intVal = (tPvUint32) (value);
-        status |= PvAttrUint32Set(this->PvHandle, "GainValue", intVal);
-        break;
-    default:
-        break;
+        case ADAcquireTime:
+            /* Prosilica uses integer microseconds */
+            status |= PvAttrUint32Set(this->PvHandle, "ExposureValue", (tPvUint32)(value * 1e6));
+            break;
+        case ADAcquirePeriod:
+            /* Prosilica uses a frame rate in Hz */
+            if (value == 0.) value = .01;
+            status |= PvAttrFloat32Set(this->PvHandle, "FrameRate", (tPvFloat32)(1./value));
+            break;
+        case ADGain:
+            /* Prosilica uses an integer value */
+            status |= PvAttrUint32Set(this->PvHandle, "GainValue", (tPvUint32)(value));
+            break;
+        case PSStrobe1Delay:
+            /* Prosilica uses integer microseconds */
+            status |= PvAttrUint32Set(this->PvHandle, "Strobe1Delay", (tPvUint32)(value*1e6));
+            break;
+        case PSStrobe1Duration:
+            /* Prosilica uses integer microseconds */
+            status |= PvAttrUint32Set(this->PvHandle, "Strobe1Duration", (tPvUint32)(value*1e6));
+            break;
+        default:
+            break;
     }
 
     /* Read the camera parameters and do callbacks */
