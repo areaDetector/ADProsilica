@@ -283,6 +283,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     int ndims, dims[2];
     int imageCounter;
     NDArray *pImage;
+    int binX, binY;
     int badFrameCounter;
     static const char *functionName = "frameCallback";
 
@@ -304,24 +305,32 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         this->pArrays[0] = pImage;
         /* Set the properties of the image to those of the current frame */
         /* Convert from the PvApi data types to ADDataType */
+        /* The pFrame structure does not contain the binning, get that from param lib,
+         * but it could be wrong for this frame if recently changed */
+        getIntegerParam(ADBinX, &binX);
+        getIntegerParam(ADBinY, &binY);
         switch(pFrame->Format) {
             case ePvFmtMono8:
                 pImage->colorMode = NDColorModeMono;
                 pImage->dataType = NDUInt8;
                 pImage->ndims = 2;
-                pImage->dims[0].size   = pFrame->Width;
-                pImage->dims[0].offset = pFrame->RegionX;
-                pImage->dims[1].size   = pFrame->Height;
-                pImage->dims[1].offset = pFrame->RegionY;
+                pImage->dims[0].size    = pFrame->Width;
+                pImage->dims[0].offset  = pFrame->RegionX;
+                pImage->dims[0].binning = binX;
+                pImage->dims[1].size    = pFrame->Height;
+                pImage->dims[1].offset  = pFrame->RegionY;
+                pImage->dims[1].binning = binY;
                 break;
             case ePvFmtMono16:
                 pImage->colorMode = NDColorModeMono;
                 pImage->dataType = NDUInt16;
                 pImage->ndims = 2;
-                pImage->dims[0].size   = pFrame->Width;
-                pImage->dims[0].offset = pFrame->RegionX;
-                pImage->dims[1].size   = pFrame->Height;
-                pImage->dims[1].offset = pFrame->RegionY;
+                pImage->dims[0].size    = pFrame->Width;
+                pImage->dims[0].offset  = pFrame->RegionX;
+                pImage->dims[0].binning = binX;
+                pImage->dims[1].size    = pFrame->Height;
+                pImage->dims[1].offset  = pFrame->RegionY;
+                pImage->dims[1].binning = binY;
                 break;
             case ePvFmtBayer8:
                 pImage->colorMode = NDColorModeBayer;
@@ -329,37 +338,49 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->ndims = 2;
                 pImage->dims[0].size   = pFrame->Width;
                 pImage->dims[0].offset = pFrame->RegionX;
+                pImage->dims[0].binning = binX;
                 pImage->dims[1].size   = pFrame->Height;
                 pImage->dims[1].offset = pFrame->RegionY;
+                pImage->dims[1].binning = binY;
                 break;
             case ePvFmtBayer16:
                 pImage->colorMode = NDColorModeBayer;
                 pImage->dataType = NDUInt16;
                 pImage->ndims = 2;
-                pImage->dims[0].size   = pFrame->Width;
-                pImage->dims[0].offset = pFrame->RegionX;
-                pImage->dims[1].size   = pFrame->Height;
-                pImage->dims[1].offset = pFrame->RegionY;
+                pImage->dims[0].size    = pFrame->Width;
+                pImage->dims[0].offset  = pFrame->RegionX;
+                pImage->dims[0].binning = binX;
+                pImage->dims[1].size    = pFrame->Height;
+                pImage->dims[1].offset  = pFrame->RegionY;
+                pImage->dims[1].binning = binY;
                 break;
             case ePvFmtRgb24:
                 pImage->colorMode = NDColorModeRGB1;
                 pImage->dataType = NDUInt8;
                 pImage->ndims = 3;
-                pImage->dims[0].size   = 3;
-                pImage->dims[1].size   = pFrame->Width;
-                pImage->dims[1].offset = pFrame->RegionX;
-                pImage->dims[2].size   = pFrame->Height;
-                pImage->dims[2].offset = pFrame->RegionY;
+                pImage->dims[0].size    = 3;
+                pImage->dims[0].offset  = 0;
+                pImage->dims[0].binning = 1;
+                pImage->dims[1].size    = pFrame->Width;
+                pImage->dims[1].offset  = pFrame->RegionX;
+                pImage->dims[1].binning = binX;
+                pImage->dims[2].size    = pFrame->Height;
+                pImage->dims[2].offset  = pFrame->RegionY;
+                pImage->dims[2].binning = binY;
                 break;
             case ePvFmtRgb48:
                 pImage->colorMode = NDColorModeRGB1;
                 pImage->dataType = NDUInt16;
                 pImage->ndims = 3;
-                pImage->dims[0].size   = 3;
-                pImage->dims[1].size   = pFrame->Width;
-                pImage->dims[1].offset = pFrame->RegionX;
-                pImage->dims[2].size   = pFrame->Height;
-                pImage->dims[2].offset = pFrame->RegionY;
+                pImage->dims[0].size    = 3;
+                pImage->dims[0].offset  = 0;
+                pImage->dims[0].binning = 1;
+                pImage->dims[1].size    = pFrame->Width;
+                pImage->dims[1].offset  = pFrame->RegionX;
+                pImage->dims[1].binning = binX;
+                pImage->dims[2].size    = pFrame->Height;
+                pImage->dims[2].offset  = pFrame->RegionY;
+                pImage->dims[2].binning = binY;
                 break;
             default:
                  /* We don't support other formats yet */
