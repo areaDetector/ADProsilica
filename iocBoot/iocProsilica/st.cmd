@@ -4,8 +4,7 @@ dbLoadDatabase("$(AREA_DETECTOR)/dbd/prosilicaApp.dbd")
 
 prosilicaApp_registerRecordDeviceDriver(pdbbase) 
 
-#prosilicaConfig("PS1", 50110, 50, 200000000)
-prosilicaConfig("PS1", 51031, 50, 200000000)
+prosilicaConfig("PS1", 51039, 50, 200000000)
 asynSetTraceIOMask("PS1",0,2)
 #asynSetTraceMask("PS1",0,255)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/ADBase.template",   "P=13PS1:,R=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
@@ -29,7 +28,7 @@ dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=file
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDFile.template",      "P=13PS1:,R=file1:,PORT=PS1File,ADDR=0,TIMEOUT=1")
 
 # Create an ROI plugin
-drvNDROIConfigure("PS1ROI", 5, 0, "PS1", 0, 10, -1)
+drvNDROIConfigure("PS1ROI", 5, 0, "PS1", 0, 10, 20, -1)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=ROI1:,  PORT=PS1ROI,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDROI.template",       "P=13PS1:,R=ROI1:,  PORT=PS1ROI,ADDR=0,TIMEOUT=1")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDROIN.template",      "P=13PS1:,R=ROI1:0:,PORT=PS1ROI,ADDR=0,TIMEOUT=1,HIST_SIZE=256")
@@ -38,10 +37,10 @@ dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDROIN.template",      "P=13PS1:,R=ROI1
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDROIN.template",      "P=13PS1:,R=ROI1:3:,PORT=PS1ROI,ADDR=3,TIMEOUT=1,HIST_SIZE=256")
 
 # Create 2 color conversion plugins
-drvNDColorConvertConfigure("PS1CC1", 5, 0, "PS1", 0, -1)
+drvNDColorConvertConfigure("PS1CC1", 5, 0, "PS1", 0, 20, -1)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","   P=13PS1:,R=CC1:,  PORT=PS1CC1,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDColorConvert.template", "P=13PS1:,R=CC1:,  PORT=PS1CC1,ADDR=0,TIMEOUT=1")
-drvNDColorConvertConfigure("PS1CC2", 5, 0, "PS1", 0, -1)
+drvNDColorConvertConfigure("PS1CC2", 5, 0, "PS1", 0, 20, -1)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","   P=13PS1:,R=CC2:,  PORT=PS1CC2,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1CC1,NDARRAY_ADDR=0")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDColorConvert.template", "P=13PS1:,R=CC2:,  PORT=PS1CC2,ADDR=0,TIMEOUT=1")
 
