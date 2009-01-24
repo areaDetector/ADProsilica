@@ -309,6 +309,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
          * but it could be wrong for this frame if recently changed */
         getIntegerParam(ADBinX, &binX);
         getIntegerParam(ADBinY, &binY);
+        pImage->bayerPattern = (NDBayerPattern_t)pFrame->BayerPattern;
         switch(pFrame->Format) {
             case ePvFmtMono8:
                 pImage->colorMode = NDColorModeMono;
@@ -389,8 +390,6 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                     driverName, functionName, pFrame->Format);
                 break;
         }
-        
-        /* We need to set the offset, binning and reverse values for each dimension here WORK NEEDED */
         
         /* Set the uniqueId and time stamp */
         pImage->uniqueId = pFrame->FrameCount;
