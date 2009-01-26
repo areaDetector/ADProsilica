@@ -1076,7 +1076,20 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
             status |= PvAttrEnumSet(this->PvHandle, "Strobe1ControlledDuration", value ? "On":"Off");
             break;
         case ADWriteFile:
-            status = writeFile();
+            if (value) {
+                /* Call the callbacks so the status changes */
+                callParamCallbacks();
+                if (this->pArrays[0]) {
+                    status = writeFile();
+                } else {
+                    asynPrint(pasynUser, ASYN_TRACE_ERROR,
+                        "%s:%s: ERROR, no valid array to write",
+                        driverName, functionName);
+                    status = asynError;
+                }
+                /* Set the flag back to 0, since this could be a busy record */
+                setIntegerParam(ADWriteFile, 0);
+            }
             break;
         case ADDataType:
         case ADColorMode:
