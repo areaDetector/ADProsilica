@@ -309,6 +309,9 @@ void prosilica::frameCallback(tPvFrame *pFrame)
          * but it could be wrong for this frame if recently changed */
         getIntegerParam(ADBinX, &binX);
         getIntegerParam(ADBinY, &binY);
+        /* The mono cameras can return a Bayer pattern which is invalid, and this can
+         * crash the file plugin.  Fix it here. */
+        if (pFrame->BayerPattern > ePvBayerBGGR) pFrame->BayerPattern = ePvBayerRGGB;
         pImage->bayerPattern = (NDBayerPattern_t)pFrame->BayerPattern;
         switch(pFrame->Format) {
             case ePvFmtMono8:
