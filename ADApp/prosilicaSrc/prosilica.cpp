@@ -16,6 +16,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef linux
+#include <readline/readline.h>
+#endif
+
 #include <epicsTime.h>
 #include <epicsThread.h>
 #include <epicsEvent.h>
@@ -1244,9 +1248,13 @@ prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t 
     int status = asynSuccess;
     static const char *functionName = "prosilica";
 
-   /* Initialize the Prosilica PvAPI library 
-    * We get an error if we call this twice, so we need a global flag to see if 
-    * it's already been done.*/
+    /* There is a conflict with readline use of signals, don't use readline signal handlers */
+#ifdef linux
+    rl_catch_signals = 0;
+#endif
+    /* Initialize the Prosilica PvAPI library 
+     * We get an error if we call this twice, so we need a global flag to see if 
+     * it's already been done.*/
     if (!PvApiInitialized) {
         status = PvInitialize();
         if (status) {
