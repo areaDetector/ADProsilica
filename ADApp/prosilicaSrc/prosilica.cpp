@@ -46,7 +46,8 @@ static int PvApiInitialized;
                                       
 class prosilica : public ADDriver {
 public:
-    prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory);
+    prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory,
+              int priority, int stackSize);
                  
     /* These are the methods that we override from ADDriver */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
@@ -1232,16 +1233,20 @@ void prosilica::report(FILE *fp, int details)
 
 extern "C" int prosilicaConfig(char *portName, /* Port name */
                                int uniqueId,   /* Unique ID # of this camera. */
-                               int maxBuffers,
-                               size_t maxMemory)
+                               int maxBuffers, size_t maxMemory,
+                               int priority, int stackSize)
 {
-    new prosilica(portName, uniqueId, maxBuffers, maxMemory);
+    new prosilica(portName, uniqueId, maxBuffers, maxMemory, priority, stackSize);
     return(asynSuccess);
 }   
 
 
-prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory)
-    : ADDriver(portName, 1, ADLastDriverParam, maxBuffers, maxMemory, 0, 0), 
+prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory,
+                     int priority, int stackSize)
+    : ADDriver(portName, 1, ADLastDriverParam, maxBuffers, maxMemory, 
+               0, 0,               /* No interfaces beyond those set in ADDriver.cpp */
+               ASYN_CANBLOCK, 1,   /* ASYN_CANBLOCK=1, ASYN_MULTIDEVICE=0, autoConnect=1 */
+               priority, stackSize), 
       PvHandle(NULL), uniqueId(uniqueId), framesRemaining(0)
 
 {
