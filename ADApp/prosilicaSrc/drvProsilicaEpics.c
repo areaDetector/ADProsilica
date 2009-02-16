@@ -25,14 +25,19 @@ static const iocshArg prosilicaConfigArg0  = {"Port name", iocshArgString};
 static const iocshArg prosilicaConfigArg1 = {"Unique Id", iocshArgInt};
 static const iocshArg prosilicaConfigArg2 = {"maxBuffers", iocshArgInt};
 static const iocshArg prosilicaConfigArg3 = {"maxMemory", iocshArgInt};
+static const iocshArg prosilicaConfigArg4 = {"priority", iocshArgInt};
+static const iocshArg prosilicaConfigArg5 = {"stackSize", iocshArgInt};
 static const iocshArg * const prosilicaConfigArgs[] = {&prosilicaConfigArg0,
                                                        &prosilicaConfigArg1,
                                                        &prosilicaConfigArg2,
-                                                       &prosilicaConfigArg3};
-static const iocshFuncDef configprosilica = {"prosilicaConfig", 4, prosilicaConfigArgs};
+                                                       &prosilicaConfigArg3,
+                                                       &prosilicaConfigArg4,
+                                                       &prosilicaConfigArg5};
+static const iocshFuncDef configprosilica = {"prosilicaConfig", 6, prosilicaConfigArgs};
 static void configprosilicaCallFunc(const iocshArgBuf *args)
 {
-    prosilicaConfig(args[0].sval, args[1].ival, args[2].ival, args[3].ival);
+    prosilicaConfig(args[0].sval, args[1].ival, args[2].ival, 
+                    args[3].ival, args[4].ival, args[5].ival);
 }
 
 

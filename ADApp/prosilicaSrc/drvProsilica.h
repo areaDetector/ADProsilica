@@ -17,8 +17,8 @@ extern "C" {
 
 int prosilicaConfig(char *portName,       /* Camera number */
                     int uniqueId,        /* Unique ID number of the camera to use */
-                    int maxBuffers,
-                    size_t maxMemory);  
+                    int maxBuffers, size_t maxMemory,
+                    int priority, int stackSize);  
 
 #ifdef __cplusplus
 }
