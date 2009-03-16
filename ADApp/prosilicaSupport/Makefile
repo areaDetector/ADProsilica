@@ -14,7 +14,7 @@ BIN_INSTALLS_WIN32    += ../PvAPI.dll
 BIN_INSTALLS_cygwin32 += ../PvAPI.dll
 LIB_INSTALLS_WIN32    += ../PvAPI.lib ../ImageLib.lib
 LIB_INSTALLS_cygwin32 += ../PvAPI.lib ../ImageLib.lib
-LIB_INSTALLS_Linux    += ../libPvAPI.a ../libImageLib.a
+LIB_INSTALLS_Linux    += ../libPvAPI.a ../libImageLib.a ../libPvAPI.so
 
 #=============================
 
