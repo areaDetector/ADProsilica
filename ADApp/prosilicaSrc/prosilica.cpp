@@ -518,7 +518,7 @@ asynStatus prosilica::getGeometry()
 {
     int status = asynSuccess;
     tPvUint32 binX, binY, minY, minX, sizeX, sizeY;
-    static const char *functionName = "setGeometry";
+    static const char *functionName = "getGeometry";
 
     status |= PvAttrUint32Get(this->PvHandle, "BinningX", &binX);
     status |= PvAttrUint32Get(this->PvHandle, "BinningY", &binY);
@@ -705,7 +705,7 @@ asynStatus prosilica::readParameters()
     double dval;
     unsigned long nchars;
     char buffer[20];
-    static const char *functionName = "setGeometry";
+    static const char *functionName = "readParameters";
 
     status |= PvAttrUint32Get(this->PvHandle, "TotalBytesPerFrame", &intVal);
     setIntegerParam(ADImageSize, intVal);
