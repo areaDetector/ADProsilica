@@ -290,6 +290,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     NDArray *pImage;
     int binX, binY;
     int badFrameCounter;
+    epicsInt32 bayerPattern, colorMode;
     static const char *functionName = "frameCallback";
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
@@ -298,7 +299,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
      * that case */
     if (pFrame->Status == ePvErrCancelled) return;
 
-    epicsMutexLock(this->mutexId);
+    this->lock();
 
     pImage = (NDArray *)pFrame->Context[1];
 
@@ -317,10 +318,10 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* The mono cameras can return a Bayer pattern which is invalid, and this can
          * crash the file plugin.  Fix it here. */
         if (pFrame->BayerPattern > ePvBayerBGGR) pFrame->BayerPattern = ePvBayerRGGB;
-        pImage->bayerPattern = (NDBayerPattern_t)pFrame->BayerPattern;
+        bayerPattern = pFrame->BayerPattern;
         switch(pFrame->Format) {
             case ePvFmtMono8:
-                pImage->colorMode = NDColorModeMono;
+                colorMode = NDColorModeMono;
                 pImage->dataType = NDUInt8;
                 pImage->ndims = 2;
                 pImage->dims[0].size    = pFrame->Width;
@@ -331,7 +332,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->dims[1].binning = binY;
                 break;
             case ePvFmtMono16:
-                pImage->colorMode = NDColorModeMono;
+                colorMode = NDColorModeMono;
                 pImage->dataType = NDUInt16;
                 pImage->ndims = 2;
                 pImage->dims[0].size    = pFrame->Width;
@@ -342,7 +343,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->dims[1].binning = binY;
                 break;
             case ePvFmtBayer8:
-                pImage->colorMode = NDColorModeBayer;
+                colorMode = NDColorModeBayer;
                 pImage->dataType = NDUInt8;
                 pImage->ndims = 2;
                 pImage->dims[0].size   = pFrame->Width;
@@ -353,7 +354,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->dims[1].binning = binY;
                 break;
             case ePvFmtBayer16:
-                pImage->colorMode = NDColorModeBayer;
+                colorMode = NDColorModeBayer;
                 pImage->dataType = NDUInt16;
                 pImage->ndims = 2;
                 pImage->dims[0].size    = pFrame->Width;
@@ -364,7 +365,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->dims[1].binning = binY;
                 break;
             case ePvFmtRgb24:
-                pImage->colorMode = NDColorModeRGB1;
+                colorMode = NDColorModeRGB1;
                 pImage->dataType = NDUInt8;
                 pImage->ndims = 3;
                 pImage->dims[0].size    = 3;
@@ -378,7 +379,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->dims[2].binning = binY;
                 break;
             case ePvFmtRgb48:
-                pImage->colorMode = NDColorModeRGB1;
+                colorMode = NDColorModeRGB1;
                 pImage->dataType = NDUInt16;
                 pImage->ndims = 3;
                 pImage->dims[0].size    = 3;
@@ -398,6 +399,8 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                     driverName, functionName, pFrame->Format);
                 break;
         }
+        pImage->addAttribute("bayerPattern", NDAttrInt32, &bayerPattern);
+        pImage->addAttribute("colorMode", NDAttrInt32, &colorMode);
         
         /* Set the uniqueId and time stamp */
         pImage->uniqueId = pFrame->FrameCount;
@@ -408,9 +411,9 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* Call the NDArray callback */
         /* Must release the lock here, or we can get into a deadlock, because we can
          * block on the plugin lock, and the plugin can be calling us */
-        epicsMutexUnlock(this->mutexId);
+        this->unlock();
         doCallbacksGenericPointer(pImage, NDArrayData, 0);
-        epicsMutexLock(this->mutexId);
+        this->lock();
 
         /* See if acquisition is done */
         if (this->framesRemaining > 0) this->framesRemaining--;
@@ -456,7 +459,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     
     /* Queue this frame to run again */
     status = PvCaptureQueueFrame(this->PvHandle, pFrame, frameCallbackC); 
-    epicsMutexUnlock(this->mutexId);
+    this->unlock();
 }
 
 asynStatus prosilica::setPixelFormat()
