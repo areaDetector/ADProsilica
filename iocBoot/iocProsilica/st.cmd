@@ -4,7 +4,7 @@ dbLoadDatabase("$(AREA_DETECTOR)/dbd/prosilicaApp.dbd")
 
 prosilicaApp_registerRecordDeviceDriver(pdbbase) 
 
-prosilicaConfig("PS1", 51039, 50, 200000000)
+prosilicaConfig("PS1", 101271, 50, 200000000)
 asynSetTraceIOMask("PS1",0,2)
 #asynSetTraceMask("PS1",0,255)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/ADBase.template",   "P=13PS1:,R=cam1:,PORT=PS1,ADDR=0,TIMEOUT=1")
@@ -24,7 +24,7 @@ dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDStdArrays.template", "P=13PS1:,R=imag
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/EPICS_AD_Viewer.template", "P=13PS1:, R=image1:")
 
 # Create a file saving plugin
-drvNDFileConfigure("PS1File", 5, 0, "PS1", 0)
+drvNDFileNetCDFConfigure("PS1File", 5, 0, "PS1", 0)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=file1:,PORT=PS1File,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDFile.template",      "P=13PS1:,R=file1:,PORT=PS1File,ADDR=0,TIMEOUT=1")
 
