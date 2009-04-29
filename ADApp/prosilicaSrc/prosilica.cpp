@@ -41,9 +41,10 @@ static const char *driverName = "prosilica";
 
 static int PvApiInitialized;
 
-#define MAX_FRAMES  2  /* Number of frame buffers for PvApi */
+#define MAX_FRAMES  2  /**< Number of frame buffers for PvApi */
 #define MAX_PACKET_SIZE 8228
                                       
+/** Driver for Prosilica GigE and CameraLink cameras using their PvApi library */
 class prosilica : public ADDriver {
 public:
     prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory,
@@ -55,11 +56,12 @@ public:
     virtual asynStatus drvUserCreate(asynUser *pasynUser, const char *drvInfo, 
                                      const char **pptypeName, size_t *psize);
     void report(FILE *fp, int details);
-                                        
+    void frameCallback(tPvFrame *pFrame); /**< This should be private, but is called from C, must be public */
+
+private:                                        
     /* These are the methods that are new to this class */
     asynStatus writeFile();
-    void frameCallback(tPvFrame *pFrame);
-    asynStatus setPixelFormat();
+     asynStatus setPixelFormat();
     asynStatus setGeometry();
     asynStatus getGeometry();
     asynStatus readStats();
@@ -82,8 +84,6 @@ public:
     tPvUint32 timeStampFrequency;
 };
 
-/* If we have any private driver commands they begin with ADFirstDriverCommand and should end
-   with ADLastDriverCommand, which is used for setting the size of the parameter library table */
 typedef enum {
     /* These parameters describe the trigger modes of the Prosilica
      * They must agree with the values in the mbbo/mbbi records in
@@ -144,6 +144,7 @@ static const char *PSStrobeModes[] = {
      
  
 
+/** Driver-specific parameters for the Prosilica driver */
 typedef enum {
     /* These parameters are specific to the Prosilica camera */
     /*    Name               asyn interface  access   Description  */
@@ -211,9 +212,9 @@ static asynParamString_t PSDetParamString[] = {
 
 #define NUM_PS_DET_PARAMS (sizeof(PSDetParamString)/sizeof(PSDetParamString[0]))
 
+/** Writes last image to disk as a TIFF file. */
 asynStatus prosilica::writeFile()
 {
-    /* Writes last image to disk as a TIFF file. */
     int status = asynSuccess, tiffStatus;
     char fullFileName[MAX_FILENAME_LEN];
     int fileFormat;
@@ -281,6 +282,7 @@ static void PVDECL frameCallbackC(tPvFrame *pFrame)
     pPvt->frameCallback(pFrame);
 }
 
+/** This function gets called in a thread from the PvApi library when a new frame arrives */
 void prosilica::frameCallback(tPvFrame *pFrame)
 {
     int status = asynSuccess;
@@ -969,6 +971,11 @@ asynStatus prosilica::connectCamera()
 }
 
 
+/** Called when asyn clients call pasynInt32->write().
+  * This function performs actions for some parameters, including ADAcquire, ADBinX, etc.
+  * For all parameters it sets the value in the parameter library and calls any registered callbacks..
+  * \param[in] pasynUser pasynUser structure that encodes the reason and address.
+  * \param[in] value Value to write. */
 asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
 {
     int function = pasynUser->reason;
@@ -1121,6 +1128,11 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
     return((asynStatus)status);
 }
 
+/** Called when asyn clients call pasynFloat64->write().
+  * This function performs actions for some parameters, including ADAcquireTime, ADGain, etc.
+  * For all parameters it sets the value in the parameter library and calls any registered callbacks..
+  * \param[in] pasynUser pasynUser structure that encodes the reason and address.
+  * \param[in] value Value to write. */
 asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
     int function = pasynUser->reason;
@@ -1171,36 +1183,36 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 }
 
 
-/* asynDrvUser routines */
+/** Sets pasynUser->reason to one of the enum values for the parameters defined for
+  * this class if the drvInfo field matches one the strings defined for it.
+  * If the parameter is not recognized by this class then calls ADDriver::drvUserCreate.
+  * Uses asynPortDriver::drvUserCreateParam.
+  * \param[in] pasynUser pasynUser structure that driver modifies
+  * \param[in] drvInfo String containing information about what driver function is being referenced
+  * \param[out] pptypeName Location in which driver puts a copy of drvInfo.
+  * \param[out] psize Location where driver puts size of param 
+  * \return Returns asynSuccess if a matching string was found, asynError if not found. */
 asynStatus prosilica::drvUserCreate(asynUser *pasynUser,
-                                    const char *drvInfo, 
-                                    const char **pptypeName, size_t *psize)
+                                       const char *drvInfo, 
+                                       const char **pptypeName, size_t *psize)
 {
     asynStatus status;
-    int param;
-    static const char *functionName = "drvUserCreate";
+    //const char *functionName = "drvUserCreate";
+    
+    status = this->drvUserCreateParam(pasynUser, drvInfo, pptypeName, psize, 
+                                      PSDetParamString, NUM_PS_DET_PARAMS);
 
-    /* See if this is one of this drivers' parameters */
-    status = findParam(PSDetParamString, NUM_PS_DET_PARAMS, 
-                       drvInfo, &param);
-    if (status == asynSuccess) {
-        pasynUser->reason = param;
-        if (pptypeName) {
-            *pptypeName = epicsStrDup(drvInfo);
-        }
-        if (psize) {
-            *psize = sizeof(param);
-        }
-        asynPrint(pasynUser, ASYN_TRACE_FLOW,
-                  "%s:%s, drvInfo=%s, param=%d\n", 
-                  driverName, functionName, drvInfo, param);
-        return(asynSuccess);
-    } 
-    /* This was not one of our driver parameters, call the base class method */
-    status = ADDriver::drvUserCreate(pasynUser, drvInfo, pptypeName, psize); 
+    /* If not, then call the base class method, see if it is known there */
+    if (status) status = ADDriver::drvUserCreate(pasynUser, drvInfo, pptypeName, psize);
     return(status);
 }
-    
+
+/** Report status of the driver.
+  * Prints details about the driver if details>0.
+  * It then calls the ADDriver::report() method.
+  * \param[in] fp File pointed passed by caller where the output is written to.
+  * \param[in] details If >0 then driver details are printed.
+  */
 void prosilica::report(FILE *fp, int details)
 {
     tPvCameraInfo cameraInfo[20]; 
@@ -1244,6 +1256,18 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
 }   
 
 
+/** Constructor for Prosilica driver; most parameters are simply passed to ADDriver::ADDriver.
+  * After calling the base class constructor this method creates a thread to collect the detector data, 
+  * and sets reasonable default values for all of the parameters defined in this class and ADStdDriverParams.h.
+  * \param[in] portName The name of the asyn port driver to be created.
+  * \param[in] uniqueId The uniqueId of the camera to be connected to this driver.
+  * \param[in] maxBuffers The maximum number of NDArray buffers that the NDArrayPool for this driver is 
+  *            allowed to allocate. Set this to -1 to allow an unlimited number of buffers.
+  * \param[in] maxMemory The maximum amount of memory that the NDArrayPool for this driver is 
+  *            allowed to allocate. Set this to -1 to allow an unlimited amount of memory.
+  * \param[in] priority The thread priority for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
+  * \param[in] stackSize The stack size for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
+  */
 prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory,
                      int priority, int stackSize)
     : ADDriver(portName, 1, ADLastDriverParam, maxBuffers, maxMemory, 
