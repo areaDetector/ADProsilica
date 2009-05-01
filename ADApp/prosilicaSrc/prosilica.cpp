@@ -149,7 +149,7 @@ typedef enum {
     /* These parameters are specific to the Prosilica camera */
     /*    Name               asyn interface  access   Description  */
     PSReadStatistics        /* (asynInt32,    r/w) Write to read statistics  */ 
-        = ADFirstDriverParam,
+        = ADLastStdParam,
     PSDriverType,           /* (asynOctet,    r/o) Ethernet driver type */ 
     PSFilterVersion,        /* (asynOctet,    r/o) Ethernet packet filter version */ 
     PSFrameRate,            /* (asynFloat64,  r/o) Frame rate */ 
@@ -264,13 +264,13 @@ asynStatus prosilica::writeFile()
             break;
     }
     
-    status |= getIntegerParam(ADFileFormat, &fileFormat);
+    status |= getIntegerParam(NDFileFormat, &fileFormat);
     /* We only support writing in TIFF format for now */
     tiffStatus = ImageWriteTiff(fullFileName, pFrame);
     if (tiffStatus != 1) {
         status |= asynError;
     } else {
-        status |= setStringParam(ADFullFileName, fullFileName);
+        status |= setStringParam(NDFullFileName, fullFileName);
     }
     return((asynStatus)status);
 }
@@ -425,12 +425,12 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         }
 
         /* Update the frame counter */
-        getIntegerParam(ADImageCounter, &imageCounter);
+        getIntegerParam(NDArrayCounter, &imageCounter);
         imageCounter++;
-        setIntegerParam(ADImageCounter, imageCounter);
+        setIntegerParam(NDArrayCounter, imageCounter);
 
         /* If autoSave is set then save the image */
-        status = getIntegerParam(ADAutoSave, &autoSave);
+        status = getIntegerParam(NDAutoSave, &autoSave);
         if (autoSave) status = writeFile();
 
         asynPrintIO(this->pasynUserSelf, ASYN_TRACEIO_DRIVER, 
@@ -471,8 +471,8 @@ asynStatus prosilica::setPixelFormat()
     static const char *functionName = "setPixelFormat";
     char pixelFormat[20];
 
-    status |= getIntegerParam(ADColorMode, &colorMode);
-    status |= getIntegerParam(ADDataType, &dataType);
+    status |= getIntegerParam(NDColorMode, &colorMode);
+    status |= getIntegerParam(NDDataType, &dataType);
     if      ((colorMode == NDColorModeMono)  && (dataType == NDUInt8))  strcpy(pixelFormat, "Mono8");
     else if ((colorMode == NDColorModeMono)  && (dataType == NDUInt16)) strcpy(pixelFormat, "Mono16");
     else if ((colorMode == NDColorModeRGB1)  && (dataType == NDUInt8))  strcpy(pixelFormat, "Rgb24");
@@ -545,8 +545,8 @@ asynStatus prosilica::getGeometry()
     status |= setIntegerParam(ADMinY,  minY*binY);
     status |= setIntegerParam(ADSizeX, sizeX*binX);
     status |= setIntegerParam(ADSizeY, sizeY*binY);
-    status |= setIntegerParam(ADImageSizeX, sizeX);
-    status |= setIntegerParam(ADImageSizeY, sizeY);
+    status |= setIntegerParam(NDArraySizeX, sizeX);
+    status |= setIntegerParam(NDArraySizeY, sizeY);
     
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
@@ -713,7 +713,7 @@ asynStatus prosilica::readParameters()
     static const char *functionName = "readParameters";
 
     status |= PvAttrUint32Get(this->PvHandle, "TotalBytesPerFrame", &intVal);
-    setIntegerParam(ADImageSize, intVal);
+    setIntegerParam(NDArraySize, intVal);
 
     status |= PvAttrEnumGet(this->PvHandle, "PixelFormat", buffer, sizeof(buffer), &nchars);
     if      (!strcmp(buffer, "Mono8")) {
@@ -746,8 +746,8 @@ asynStatus prosilica::readParameters()
             "%s:%s: error unsupported data type %d and/or color mode %d\n", 
             driverName, functionName, dataType, colorMode);
     }
-    status |= setIntegerParam(ADDataType, dataType);
-    status |= setIntegerParam(ADColorMode, colorMode);
+    status |= setIntegerParam(NDDataType, dataType);
+    status |= setIntegerParam(NDColorMode, colorMode);
     
     status |= getGeometry();
 
@@ -1093,7 +1093,7 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
         case PSStrobe1CtlDuration:
             status |= PvAttrEnumSet(this->PvHandle, "Strobe1ControlledDuration", value ? "On":"Off");
             break;
-        case ADWriteFile:
+        case NDWriteFile:
             if (value) {
                 /* Call the callbacks so the status changes */
                 callParamCallbacks();
@@ -1106,11 +1106,11 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
                     status = asynError;
                 }
                 /* Set the flag back to 0, since this could be a busy record */
-                setIntegerParam(ADWriteFile, 0);
+                setIntegerParam(NDWriteFile, 0);
             }
             break;
-        case ADDataType:
-        case ADColorMode:
+        case NDDataType:
+        case NDColorMode:
             status = setPixelFormat();
             break;
     }
