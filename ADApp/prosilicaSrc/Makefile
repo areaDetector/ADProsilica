@@ -11,7 +11,6 @@ LIBRARY_IOC_WIN32 += prosilica
 #LIBRARY_IOC_cygwin32 += prosilica
 LIBRARY_IOC_Linux += prosilica
 LIB_SRCS += prosilica.cpp
-LIB_SRCS += drvProsilicaEpics.c
 LIB_LIBS += NDPluginColorConvert NDPlugin ADBase netCDF
 LIB_LIBS += PvAPI ImageLib
 LIB_LIBS += calc busy sscan autosave
