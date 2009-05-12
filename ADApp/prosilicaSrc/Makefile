@@ -38,6 +38,8 @@ prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
 
 #prosilicaApp_SYS_LIBS_cygwin32 += rpc
+prosilicaApp_LIBS_WIN32 += jpeg
+prosilicaApp_LIBS_cygwin32 += libtiff jpeg
 prosilicaApp_SYS_LIBS_Linux += tiff jpeg z
 #=============================
 
