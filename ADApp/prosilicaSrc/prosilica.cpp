@@ -1337,4 +1337,6 @@ static void prosilicaRegister(void)
     iocshRegister(&configprosilica, configprosilicaCallFunc);
 }
 
+extern "C" {
 epicsExportRegistrar(prosilicaRegister);
+}
