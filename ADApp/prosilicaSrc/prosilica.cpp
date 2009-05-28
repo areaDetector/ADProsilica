@@ -520,11 +520,17 @@ asynStatus prosilica::setGeometry()
 asynStatus prosilica::getGeometry()
 {
     int status = asynSuccess;
+    int s;
     tPvUint32 binX, binY, minY, minX, sizeX, sizeY;
     static const char *functionName = "getGeometry";
 
-    status |= PvAttrUint32Get(this->PvHandle, "BinningX", &binX);
-    status |= PvAttrUint32Get(this->PvHandle, "BinningY", &binY);
+    /* CMOS cameras don't support binning, so ignore ePvErrNotFound errors */
+    s = PvAttrUint32Get(this->PvHandle, "BinningX", &binX);
+    if (s) binX = 1;
+    if (s != ePvErrNotFound) status |= s;
+    s = PvAttrUint32Get(this->PvHandle, "BinningY", &binY);
+    if (s) binY = 1;
+    if (s != ePvErrNotFound) status |= s;
     status |= PvAttrUint32Get(this->PvHandle, "RegionX",  &minX);
     status |= PvAttrUint32Get(this->PvHandle, "RegionY",  &minY);
     status |= PvAttrUint32Get(this->PvHandle, "Width",    &sizeX);
