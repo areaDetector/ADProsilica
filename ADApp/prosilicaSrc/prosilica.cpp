@@ -287,6 +287,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     int autoSave;
     int ndims, dims[2];
     int imageCounter;
+    int arrayCallbacks;
     NDArray *pImage;
     int binX, binY;
     int badFrameCounter;
@@ -408,12 +409,19 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         pImage->timeStamp = ((double)pFrame->TimestampLo + 
                              (double)pFrame->TimestampHi*4294967296.)/this->timeStampFrequency;
         
-        /* Call the NDArray callback */
-        /* Must release the lock here, or we can get into a deadlock, because we can
-         * block on the plugin lock, and the plugin can be calling us */
-        this->unlock();
-        doCallbacksGenericPointer(pImage, NDArrayData, 0);
-        this->lock();
+        /* Get any attributes that have been defined for this driver */        
+        this->getAttributes(pImage);
+        
+        getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
+
+        if (arrayCallbacks) {
+            /* Call the NDArray callback */
+            /* Must release the lock here, or we can get into a deadlock, because we can
+             * block on the plugin lock, and the plugin can be calling us */
+            this->unlock();
+            doCallbacksGenericPointer(pImage, NDArrayData, 0);
+            this->lock();
+        }
 
         /* See if acquisition is done */
         if (this->framesRemaining > 0) this->framesRemaining--;
@@ -1117,6 +1125,10 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
         case NDColorMode:
             status = setPixelFormat();
             break;
+        default:
+            /* If this is not a parameter we have handled call the base class */
+            if (function < ADLastStdParam) status = ADDriver::writeInt32(pasynUser, value);
+            break;
     }
     
     /* Read the camera parameters and do callbacks */
@@ -1170,6 +1182,8 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
             status |= PvAttrUint32Set(this->PvHandle, "Strobe1Duration", (tPvUint32)(value*1e6));
             break;
         default:
+            /* If this is not a parameter we have handled call the base class */
+            if (function < ADLastStdParam) status = ADDriver::writeFloat64(pasynUser, value);
             break;
     }
 
