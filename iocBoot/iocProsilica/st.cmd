@@ -52,10 +52,10 @@ dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDROIN.template",      "P=13PS1:,R=ROI1
 
 # Create 2 color conversion plugins
 NDColorConvertConfigure("PS1CC1", 5, 0, "PS1", 0, 20, -1)
-dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","   P=13PS1:,R=CC1:,  PORT=PS1CC1,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template",   "P=13PS1:,R=CC1:,  PORT=PS1CC1,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDColorConvert.template", "P=13PS1:,R=CC1:,  PORT=PS1CC1,ADDR=0,TIMEOUT=1")
 NDColorConvertConfigure("PS1CC2", 5, 0, "PS1", 0, 20, -1)
-dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","   P=13PS1:,R=CC2:,  PORT=PS1CC2,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1CC1,NDARRAY_ADDR=0")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template",   "P=13PS1:,R=CC2:,  PORT=PS1CC2,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1CC1,NDARRAY_ADDR=0")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDColorConvert.template", "P=13PS1:,R=CC2:,  PORT=PS1CC2,ADDR=0,TIMEOUT=1")
 
 
