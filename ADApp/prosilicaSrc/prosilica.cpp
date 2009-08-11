@@ -400,8 +400,8 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                     driverName, functionName, pFrame->Format);
                 break;
         }
-        pImage->addAttribute("bayerPattern", NDAttrInt32, &bayerPattern);
-        pImage->addAttribute("colorMode", NDAttrInt32, &colorMode);
+        pImage->pAttributeList->add("bayerPattern", "Bayer Pattern", NDAttrInt32, &bayerPattern);
+        pImage->pAttributeList->add("colorMode", "Color Mode", NDAttrInt32, &colorMode);
         
         /* Set the uniqueId and time stamp */
         pImage->uniqueId = pFrame->FrameCount;
@@ -410,7 +410,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                              (double)pFrame->TimestampHi*4294967296.)/this->timeStampFrequency;
         
         /* Get any attributes that have been defined for this driver */        
-        this->getAttributes(pImage);
+        this->getAttributes(pImage->pAttributeList);
         
         getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
 
