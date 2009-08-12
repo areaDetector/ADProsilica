@@ -38,9 +38,19 @@ prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
 
 #prosilicaApp_SYS_LIBS_cygwin32 += rpc
-prosilicaApp_LIBS_WIN32 += jpeg
-prosilicaApp_LIBS_cygwin32 += libtiff jpeg
-prosilicaApp_SYS_LIBS_Linux += tiff jpeg z
+prosilicaApp_LIBS_WIN32          +=         jpeg libNeXus.dll
+prosilicaApp_LIBS_cygwin32       += libtiff jpeg libNeXus.dll
+
+# To use versions of these libraries supplied with areaDetector use this line
+prosilicaApp_LIBS_Linux        += NeXus mfhdf df hdf5 mxml
+# To use system versions of these libraries use this line
+#prosilicaApp_SYS_LIBS_Linux    += NeXus mfhdf df hdf5 mxml
+
+# To use versions of these libraries supplied with areaDetector use this line
+prosilicaApp_LIBS_Linux        += tiff jpeg z
+# To use system versions of these libraries use this line
+#prosilicaApp_SYS_LIBS_Linux    += tiff jpeg z
+
 #=============================
 
 include $(TOP)/configure/RULES
