@@ -4,6 +4,10 @@ dbLoadDatabase("$(AREA_DETECTOR)/dbd/prosilicaApp.dbd")
 
 prosilicaApp_registerRecordDeviceDriver(pdbbase) 
 
+# The second parameter to the prosilicaConfig command is the uniqueId of the camera.
+# The simplest way to determine the uniqueId of a camera is to run the Prosilica GigEViewer application, 
+# select the camera, and press the "i" icon on the bottom of the main window to show the camera information for this camera. 
+# The Unique ID will be displayed on the first line in the information window.
 prosilicaConfig("PS1", 51031, 50, 200000000)
 asynSetTraceIOMask("PS1",0,2)
 #asynSetTraceMask("PS1",0,255)
