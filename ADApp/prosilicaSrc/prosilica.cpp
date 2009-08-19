@@ -400,8 +400,8 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                     driverName, functionName, pFrame->Format);
                 break;
         }
-        pImage->pAttributeList->add("bayerPattern", "Bayer Pattern", NDAttrInt32, &bayerPattern);
-        pImage->pAttributeList->add("colorMode", "Color Mode", NDAttrInt32, &colorMode);
+        pImage->pAttributeList->add("BayerPattern", "Bayer Pattern", NDAttrInt32, &bayerPattern);
+        pImage->pAttributeList->add("ColorMode", "Color Mode", NDAttrInt32, &colorMode);
         
         /* Set the uniqueId and time stamp */
         pImage->uniqueId = pFrame->FrameCount;
@@ -1276,7 +1276,7 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
 
 /** Constructor for Prosilica driver; most parameters are simply passed to ADDriver::ADDriver.
   * After calling the base class constructor this method creates a thread to collect the detector data, 
-  * and sets reasonable default values for all of the parameters defined in this class and ADStdDriverParams.h.
+  * and sets reasonable default values for the parameters defined in this class, asynNDArrayDriver and ADDriver.
   * \param[in] portName The name of the asyn port driver to be created.
   * \param[in] uniqueId The uniqueId of the camera to be connected to this driver.
   * \param[in] maxBuffers The maximum number of NDArray buffers that the NDArrayPool for this driver is 
