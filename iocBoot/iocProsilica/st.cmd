@@ -23,9 +23,14 @@ dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/prosilica.template","P=13PS1:,R=cam1:,P
 # Create a standard arrays plugin, set it to get data from first Prosilica driver.
 NDStdArraysConfigure("PS1Image", 5, 0, "PS1", 0, -1)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=image1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
-dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDStdArrays.template", "P=13PS1:,R=image1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,TYPE=Int8,FTVL=UCHAR,NELEMENTS=4177920")
+# Use this line if you only want to use the Prosilica in 8-bit mode.  It uses an 8-bit waveform record
+# NELEMENTS is set large enough for a 2048x2048 image size.  Must be at least as big as the maximum size of your camera images
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDStdArrays.template", "P=13PS1:,R=image1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,TYPE=Int8,FTVL=UCHAR,NELEMENTS=4194304")
+# Use this line if you want to use the Prosilica in 8,12 or 16-bit modes.  
+# It uses an 16-bit waveform record, so it uses twice the memory and bandwidth for 8-bit data.
+#dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDStdArrays.template", "P=13PS1:,R=image1:,PORT=PS1Image,ADDR=0,TIMEOUT=1,TYPE=Int16,FTVL=SHORT,NELEMENTS=4194304")
 # Load the database to use with Stephen Mudie's IDL code
-dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/EPICS_AD_Viewer.template", "P=13PS1:, R=image1:")
+#dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/EPICS_AD_Viewer.template", "P=13PS1:, R=image1:")
 
 # Create a netCDF file saving plugin
 NDFileNetCDFConfigure("PS1FileNetCDF", 5, 0, "PS1", 0)
