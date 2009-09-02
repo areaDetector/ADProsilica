@@ -14,7 +14,12 @@ BIN_INSTALLS_WIN32    += ../PvAPI.dll
 BIN_INSTALLS_cygwin32 += ../PvAPI.dll
 LIB_INSTALLS_WIN32    += ../PvAPI.lib ../ImageLib.lib
 LIB_INSTALLS_cygwin32 += ../PvAPI.lib ../ImageLib.lib
-LIB_INSTALLS_Linux    += ../libPvAPI.a ../libImageLib.a ../libPvAPI.so
+ifeq ($(T_A), linux-x86)
+LIB_INSTALLS_Linux += ../os/linux-x86/libPvAPI.a    ../os/linux-x86/libImageLib.a
+endif
+ifeq ($(T_A), linux-x86_64) 
+LIB_INSTALLS_Linux += ../os/linux-x86_64/libPvAPI.a ../os/linux-x86_64/libImageLib.a
+endif
 
 #=============================
 
