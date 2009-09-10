@@ -7,6 +7,12 @@ include $(TOP)/configure/CONFIG
 #USR_CFLAGS += 
 USR_CXXFLAGS_Linux += -D_LINUX -D_x86
 
+# The following is needed on win32-x86-debug because the Prosilica library 
+# wants to use LIBCMT, and that conflicts with LIBCMTD
+ifeq ($(T_A), win32-x86-debug)
+USR_LDFLAGS += /NODEFAULTLIB:LIBCMT
+endif
+
 LIBRARY_IOC_WIN32 += prosilica
 #LIBRARY_IOC_cygwin32 += prosilica
 LIBRARY_IOC_Linux += prosilica
