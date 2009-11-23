@@ -51,11 +51,39 @@ public:
     /* These are the methods that we override from ADDriver */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
     virtual asynStatus writeFloat64(asynUser *pasynUser, epicsFloat64 value);
-    virtual asynStatus drvUserCreate(asynUser *pasynUser, const char *drvInfo, 
-                                     const char **pptypeName, size_t *psize);
     void report(FILE *fp, int details);
     void frameCallback(tPvFrame *pFrame); /**< This should be private, but is called from C, must be public */
 
+protected:
+    int PSReadStatistics;
+    #define FIRST_PS_PARAM PSReadStatistics
+    int PSDriverType;
+    int PSFilterVersion;
+    int PSFrameRate;
+    int PSFramesCompleted;
+    int PSFramesDropped;
+    int PSPacketsErroneous;
+    int PSPacketsMissed;
+    int PSPacketsReceived;
+    int PSPacketsRequested;
+    int PSPacketsResent;
+    int PSBadFrameCounter;
+    int PSSyncIn1Level;
+    int PSSyncIn2Level;
+    int PSSyncOut1Mode;
+    int PSSyncOut1Level;
+    int PSSyncOut1Invert;
+    int PSSyncOut2Mode;
+    int PSSyncOut2Level;
+    int PSSyncOut2Invert;
+    int PSSyncOut3Mode;
+    int PSSyncOut3Level;
+    int PSSyncOut3Invert;
+    int PSStrobe1Mode;
+    int PSStrobe1Delay;
+    int PSStrobe1CtlDuration;
+    int PSStrobe1Duration;
+    #define LAST_PS_PARAM PSStrobe1Duration
 private:                                        
     /* These are the methods that are new to this class */
     asynStatus writeFile();
@@ -82,6 +110,7 @@ private:
     tPvUint32 timeStampFrequency;
 };
 
+#define NUM_PS_PARAMS (&LAST_PS_PARAM - &FIRST_PS_PARAM + 1)
 typedef enum {
     /* These parameters describe the trigger modes of the Prosilica
      * They must agree with the values in the mbbo/mbbi records in
@@ -143,72 +172,34 @@ static const char *PSStrobeModes[] = {
  
 
 /** Driver-specific parameters for the Prosilica driver */
-typedef enum {
-    /* These parameters are specific to the Prosilica camera */
-    /*    Name               asyn interface  access   Description  */
-    PSReadStatistics        /* (asynInt32,    r/w) Write to read statistics  */ 
-        = ADLastStdParam,
-    PSDriverType,           /* (asynOctet,    r/o) Ethernet driver type */ 
-    PSFilterVersion,        /* (asynOctet,    r/o) Ethernet packet filter version */ 
-    PSFrameRate,            /* (asynFloat64,  r/o) Frame rate */ 
-    PSFramesCompleted,      /* (asynInt32,    r/o) Frames completed */ 
-    PSFramesDropped,        /* (asynInt32,    r/o) Frames dropped */ 
-    PSPacketsErroneous,     /* (asynInt32,    r/o) Erroneous packets */ 
-    PSPacketsMissed,        /* (asynInt32,    r/o) Missed packets */ 
-    PSPacketsReceived,      /* (asynInt32,    r/o) Packets received */ 
-    PSPacketsRequested,     /* (asynInt32,    r/o) Packets requested */ 
-    PSPacketsResent,        /* (asynInt32,    r/o) Packets resent */
-    PSBadFrameCounter,      /* (asynInt32,    r/o) Bad frame counter */
-    PSSyncIn1Level,         /* (asynInt32,    r/o) Sync input 1 level */
-    PSSyncIn2Level,         /* (asynInt32,    r/o) Sync input 2 level */
-    PSSyncOut1Mode,         /* (asynInt32,    r/w) Sync output 1 mode */
-    PSSyncOut1Level,        /* (asynInt32,    r/w) Sync output 1 level */
-    PSSyncOut1Invert,       /* (asynInt32,    r/w) Sync output 1 invert */
-    PSSyncOut2Mode,         /* (asynInt32,    r/w) Sync output 2 mode */
-    PSSyncOut2Level,        /* (asynInt32,    r/w) Sync output 2 level */
-    PSSyncOut2Invert,       /* (asynInt32,    r/w) Sync output 2 invert */
-    PSSyncOut3Mode,         /* (asynInt32,    r/w) Sync output 3 mode */
-    PSSyncOut3Level,        /* (asynInt32,    r/w) Sync output 3 level */
-    PSSyncOut3Invert,       /* (asynInt32,    r/w) Sync output 3 invert */
-    PSStrobe1Mode,          /* (asynInt32,    r/w) Strobe 1 mode */
-    PSStrobe1Delay,         /* (asynFloat64,  r/w) Strobe 1 delay */
-    PSStrobe1CtlDuration,   /* (asynInt32,    r/w) Strobe 1 controlled duration */
-    PSStrobe1Duration,      /* (asynFloat64,  r/w) Strobe 1 duration */
-    ADLastDriverParam
-} PSDetParam_t;
-
-static asynParamString_t PSDetParamString[] = {
-    {PSReadStatistics,        "PS_READ_STATISTICS"},
-    {PSDriverType,            "PS_DRIVER_TYPE"},
-    {PSFilterVersion,         "PS_FILTER_VERSION"},
-    {PSFrameRate,             "PS_FRAME_RATE"},
-    {PSFramesCompleted,       "PS_FRAMES_COMPLETED"},
-    {PSFramesDropped,         "PS_FRAMES_DROPPED"},
-    {PSPacketsErroneous,      "PS_PACKETS_ERRONEOUS"},
-    {PSPacketsMissed,         "PS_PACKETS_MISSED"},
-    {PSPacketsReceived,       "PS_PACKETS_RECEIVED"},
-    {PSPacketsRequested,      "PS_PACKETS_REQUESTED"},
-    {PSPacketsResent,         "PS_PACKETS_RESENT"},
-    {PSBadFrameCounter,       "PS_BAD_FRAME_COUNTER"},
-    {PSSyncIn1Level,          "PS_SYNC_IN_1_LEVEL"},
-    {PSSyncIn2Level,          "PS_SYNC_IN_2_LEVEL"},
-    {PSSyncOut1Mode,          "PS_SYNC_OUT_1_MODE"},
-    {PSSyncOut1Level,         "PS_SYNC_OUT_1_LEVEL"},
-    {PSSyncOut1Invert,        "PS_SYNC_OUT_1_INVERT"},
-    {PSSyncOut2Mode,          "PS_SYNC_OUT_2_MODE"},
-    {PSSyncOut2Level,         "PS_SYNC_OUT_2_LEVEL"},
-    {PSSyncOut2Invert,        "PS_SYNC_OUT_2_INVERT"},
-    {PSSyncOut3Mode,          "PS_SYNC_OUT_3_MODE"},
-    {PSSyncOut3Level,         "PS_SYNC_OUT_3_LEVEL"},
-    {PSSyncOut3Invert,        "PS_SYNC_OUT_3_INVERT"},
-    {PSStrobe1Mode,           "PS_STROBE_1_MODE"},
-    {PSStrobe1Delay,          "PS_STROBE_1_DELAY"},
-    {PSStrobe1CtlDuration,    "PS_STROBE_1_CTL_DURATION"},
-    {PSStrobe1Duration,       "PS_STROBE_1_DURATION"},
-
-};
-
-#define NUM_PS_DET_PARAMS (sizeof(PSDetParamString)/sizeof(PSDetParamString[0]))
+    /*                                       String              asyn interface  access   Description  */
+#define PSReadStatisticsString       "PS_READ_STATISTICS"      /* (asynInt32,    r/w) Write to read statistics  */ 
+#define PSDriverTypeString           "PS_DRIVER_TYPE"          /* (asynOctet,    r/o) Ethernet driver type */ 
+#define PSFilterVersionString        "PS_FILTER_VERSION"       /* (asynOctet,    r/o) Ethernet packet filter version */ 
+#define PSFrameRateString            "PS_FRAME_RATE"           /* (asynFloat64,  r/o) Frame rate */ 
+#define PSFramesCompletedString      "PS_FRAMES_COMPLETED"     /* (asynInt32,    r/o) Frames completed */ 
+#define PSFramesDroppedString        "PS_FRAMES_DROPPED"       /* (asynInt32,    r/o) Frames dropped */ 
+#define PSPacketsErroneousString     "PS_PACKETS_ERRONEOUS"    /* (asynInt32,    r/o) Erroneous packets */ 
+#define PSPacketsMissedString        "PS_PACKETS_MISSED"       /* (asynInt32,    r/o) Missed packets */ 
+#define PSPacketsReceivedString      "PS_PACKETS_RECEIVED"     /* (asynInt32,    r/o) Packets received */ 
+#define PSPacketsRequestedString     "PS_PACKETS_REQUESTED"    /* (asynInt32,    r/o) Packets requested */ 
+#define PSPacketsResentString        "PS_PACKETS_RESENT"       /* (asynInt32,    r/o) Packets resent */
+#define PSBadFrameCounterString      "PS_BAD_FRAME_COUNTER"    /* (asynInt32,    r/o) Bad frame counter */
+#define PSSyncIn1LevelString         "PS_SYNC_IN_1_LEVEL"      /* (asynInt32,    r/o) Sync input 1 level */
+#define PSSyncIn2LevelString         "PS_SYNC_IN_2_LEVEL"      /* (asynInt32,    r/o) Sync input 2 level */
+#define PSSyncOut1ModeString         "PS_SYNC_OUT_1_MODE"      /* (asynInt32,    r/w) Sync output 1 mode */
+#define PSSyncOut1LevelString        "PS_SYNC_OUT_1_LEVEL"     /* (asynInt32,    r/w) Sync output 1 level */
+#define PSSyncOut1InvertString       "PS_SYNC_OUT_1_INVERT"    /* (asynInt32,    r/w) Sync output 1 invert */
+#define PSSyncOut2ModeString         "PS_SYNC_OUT_2_MODE"      /* (asynInt32,    r/w) Sync output 2 mode */
+#define PSSyncOut2LevelString        "PS_SYNC_OUT_2_LEVEL"     /* (asynInt32,    r/w) Sync output 2 level */
+#define PSSyncOut2InvertString       "PS_SYNC_OUT_2_INVERT"    /* (asynInt32,    r/w) Sync output 2 invert */
+#define PSSyncOut3ModeString         "PS_SYNC_OUT_3_MODE"      /* (asynInt32,    r/w) Sync output 3 mode */
+#define PSSyncOut3LevelString        "PS_SYNC_OUT_3_LEVEL"     /* (asynInt32,    r/w) Sync output 3 level */
+#define PSSyncOut3InvertString       "PS_SYNC_OUT_3_INVERT"    /* (asynInt32,    r/w) Sync output 3 invert */
+#define PSStrobe1ModeString          "PS_STROBE_1_MODE"        /* (asynInt32,    r/w) Strobe 1 mode */
+#define PSStrobe1DelayString         "PS_STROBE_1_DELAY"       /* (asynFloat64,  r/w) Strobe 1 delay */
+#define PSStrobe1CtlDurationString   "PS_STROBE_1_CTL_DURATION"/* (asynInt32,    r/w) Strobe 1 controlled duration */
+#define PSStrobe1DurationString      "PS_STROBE_1_DURATION"    /* (asynFloat64,  r/w) Strobe 1 duration */
 
 /** Writes last image to disk as a TIFF file. */
 asynStatus prosilica::writeFile()
@@ -999,113 +990,96 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
      * status at the end, but that's OK */
     status |= setIntegerParam(function, value);
 
-    switch (function) {
-        case ADBinX:
-        case ADBinY:
-        case ADMinX:
-        case ADSizeX:
-        case ADMinY:
-        case ADSizeY:
-            /* These commands change the chip readout geometry.  We need to cache them and apply them in the
-             * correct order */
-            status |= setGeometry();
+    if ((function == ADBinX) ||
+        (function == ADBinX) ||
+        (function == ADBinY) ||
+        (function == ADMinX) ||
+        (function == ADSizeX) ||
+        (function == ADMinY) ||
+        (function == ADSizeY)) {
+        /* These commands change the chip readout geometry.  We need to cache them and apply them in the
+         * correct order */
+        status |= setGeometry();
+    } else if (function == ADNumImages) {
+        status |= PvAttrUint32Set(this->PvHandle, "AcquisitionFrameCount", value);
+    } else if (function == ADImageMode) {
+        switch(value) {
+        case ADImageSingle:
+            status |= PvAttrEnumSet(this->PvHandle, "AcquisitionMode", "SingleFrame");
             break;
-        case ADNumImages:
-            status |= PvAttrUint32Set(this->PvHandle, "AcquisitionFrameCount", value);
+        case ADImageMultiple:
+            status |= PvAttrEnumSet(this->PvHandle, "AcquisitionMode", "MultiFrame");
             break;
-        case ADImageMode:
-            switch(value) {
+        case ADImageContinuous:
+            status |= PvAttrEnumSet(this->PvHandle, "AcquisitionMode", "Continuous");
+            break;
+       }
+    } else if (function == ADAcquire) {
+        if (value) {
+            /* We need to set the number of images we expect to collect, so the frame callback function
+               can know when acquisition is complete.  We need to find out what mode we are in and how
+               many frames have been requested.  If we are in continuous mode then set the number of
+               remaining frames to -1. */
+            int imageMode, numImages;
+            status |= getIntegerParam(ADImageMode, &imageMode);
+            status |= getIntegerParam(ADNumImages, &numImages);
+            switch(imageMode) {
             case ADImageSingle:
-                status |= PvAttrEnumSet(this->PvHandle, "AcquisitionMode", "SingleFrame");
+                this->framesRemaining = 1;
                 break;
             case ADImageMultiple:
-                status |= PvAttrEnumSet(this->PvHandle, "AcquisitionMode", "MultiFrame");
+                this->framesRemaining = numImages;
                 break;
             case ADImageContinuous:
-                status |= PvAttrEnumSet(this->PvHandle, "AcquisitionMode", "Continuous");
+                this->framesRemaining = -1;
                 break;
-            }
-            break;
-        case ADAcquire:
-            if (value) {
-                /* We need to set the number of images we expect to collect, so the frame callback function
-                   can know when acquisition is complete.  We need to find out what mode we are in and how
-                   many frames have been requested.  If we are in continuous mode then set the number of
-                   remaining frames to -1. */
-                int imageMode, numImages;
-                status |= getIntegerParam(ADImageMode, &imageMode);
-                status |= getIntegerParam(ADNumImages, &numImages);
-                switch(imageMode) {
-                case ADImageSingle:
-                    this->framesRemaining = 1;
-                    break;
-                case ADImageMultiple:
-                    this->framesRemaining = numImages;
-                    break;
-                case ADImageContinuous:
-                    this->framesRemaining = -1;
-                    break;
-                }
-                setIntegerParam(ADStatus, ADStatusAcquire);
-                status |= PvCommandRun(this->PvHandle, "AcquisitionStart");
-            } else {
-                setIntegerParam(ADStatus, ADStatusIdle);
-                status |= PvCommandRun(this->PvHandle, "AcquisitionAbort");
-            }
-            break;
-        case ADTriggerMode:
-            if ((value < 0) || (value > (NUM_START_TRIGGER_MODES-1))) {
-                status = asynError;
-                break;
-            }
+           }
+            setIntegerParam(ADStatus, ADStatusAcquire);
+            status |= PvCommandRun(this->PvHandle, "AcquisitionStart");
+        } else {
+            setIntegerParam(ADStatus, ADStatusIdle);
+            status |= PvCommandRun(this->PvHandle, "AcquisitionAbort");
+        }
+    } else if (function == ADTriggerMode) {
+        if ((value < 0) || (value > (NUM_START_TRIGGER_MODES-1))) {
+            status = asynError;
+        } else {
             status |= PvAttrEnumSet(this->PvHandle, "FrameStartTriggerMode", 
                                     PSTriggerStartModes[value]);
-            break;
-        case PSReadStatistics:
+        }
+    } else if (function == PSReadStatistics) {
             readStats();
-            break;
-        case PSSyncOut1Mode:
+    } else if (function == PSSyncOut1Mode) {
             status |= PvAttrEnumSet(this->PvHandle, "SyncOut1Mode", PSSyncOutModes[value]);
-            break;
-        case PSSyncOut2Mode:
+    } else if (function == PSSyncOut2Mode) {
             status |= PvAttrEnumSet(this->PvHandle, "SyncOut2Mode", PSSyncOutModes[value]);
-            break;
-        case PSSyncOut3Mode:
+    } else if (function == PSSyncOut3Mode) {
             status |= PvAttrEnumSet(this->PvHandle, "SyncOut3Mode", PSSyncOutModes[value]);
             if (status == ePvErrNotFound) status = 0;
-            break;
-        case PSSyncOut1Level:
+    } else if (function == PSSyncOut1Level) {
             status |= PvAttrUint32Get(this->PvHandle, "SyncOutGpoLevels", &syncs);
             syncs = (syncs & ~0x01) | ((value<<0) & 0x01);
             status |= PvAttrUint32Set(this->PvHandle, "SyncOutGpoLevels", syncs);
-            break;
-        case PSSyncOut2Level:
+    } else if (function == PSSyncOut2Level) {
             status |= PvAttrUint32Get(this->PvHandle, "SyncOutGpoLevels", &syncs);
             syncs = (syncs & ~0x02) | ((value<<1) & 0x02);
             status |= PvAttrUint32Set(this->PvHandle, "SyncOutGpoLevels", syncs);
-            break;
-        case PSSyncOut3Level:
+    } else if (function == PSSyncOut3Level) {
             status |= PvAttrUint32Get(this->PvHandle, "SyncOutGpoLevels", &syncs);
             syncs = (syncs & ~0x04) | ((value<<2) & 0x04);
             status |= PvAttrUint32Set(this->PvHandle, "SyncOutGpoLevels", syncs);
-            break;
-        case PSSyncOut1Invert:
+    } else if (function == PSSyncOut1Invert) {
             status |= PvAttrEnumSet(this->PvHandle, "SyncOut1Invert", value ? "On":"Off");
-            break;
-        case PSSyncOut2Invert:
+    } else if (function == PSSyncOut2Invert) {
             status |= PvAttrEnumSet(this->PvHandle, "SyncOut2Invert", value ? "On":"Off");
-            break;
-        case PSSyncOut3Invert:
+    } else if (function == PSSyncOut3Invert) {
             status |= PvAttrEnumSet(this->PvHandle, "SyncOut3Invert", value ? "On":"Off");
             if (status == ePvErrNotFound) status = 0;
-            break;
-        case PSStrobe1Mode:
+    } else if (function == PSStrobe1Mode) {
             status |= PvAttrEnumSet(this->PvHandle, "Strobe1Mode", PSStrobeModes[value]);
-            break;
-        case PSStrobe1CtlDuration:
+    } else if (function == PSStrobe1CtlDuration) {
             status |= PvAttrEnumSet(this->PvHandle, "Strobe1ControlledDuration", value ? "On":"Off");
-            break;
-        case NDWriteFile:
+    } else if (function == NDWriteFile) {
             if (value) {
                 /* Call the callbacks so the status changes */
                 callParamCallbacks();
@@ -1120,15 +1094,12 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
                 /* Set the flag back to 0, since this could be a busy record */
                 setIntegerParam(NDWriteFile, 0);
             }
-            break;
-        case NDDataType:
-        case NDColorMode:
+    } else if ((function == NDDataType) ||
+                (function == NDColorMode)) {
             status = setPixelFormat();
-            break;
-        default:
+    } else {
             /* If this is not a parameter we have handled call the base class */
-            if (function < ADLastStdParam) status = ADDriver::writeInt32(pasynUser, value);
-            break;
+            if (function < FIRST_PS_PARAM) status = ADDriver::writeInt32(pasynUser, value);
     }
     
     /* Read the camera parameters and do callbacks */
@@ -1153,76 +1124,46 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
     int function = pasynUser->reason;
     int status = asynSuccess;
+    const char *paramName;
     static const char *functionName = "writeFloat64";
 
+    getParamName(function, &paramName);
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
     status |= setDoubleParam(function, value);
 
-    switch (function) {
-        case ADAcquireTime:
-            /* Prosilica uses integer microseconds */
-            status |= PvAttrUint32Set(this->PvHandle, "ExposureValue", (tPvUint32)(value * 1e6));
-            break;
-        case ADAcquirePeriod:
-            /* Prosilica uses a frame rate in Hz */
-            if (value == 0.) value = .01;
-            status |= PvAttrFloat32Set(this->PvHandle, "FrameRate", (tPvFloat32)(1./value));
-            break;
-        case ADGain:
-            /* Prosilica uses an integer value */
-            status |= PvAttrUint32Set(this->PvHandle, "GainValue", (tPvUint32)(value));
-            break;
-        case PSStrobe1Delay:
-            /* Prosilica uses integer microseconds */
-            status |= PvAttrUint32Set(this->PvHandle, "Strobe1Delay", (tPvUint32)(value*1e6));
-            break;
-        case PSStrobe1Duration:
-            /* Prosilica uses integer microseconds */
-            status |= PvAttrUint32Set(this->PvHandle, "Strobe1Duration", (tPvUint32)(value*1e6));
-            break;
-        default:
-            /* If this is not a parameter we have handled call the base class */
-            if (function < ADLastStdParam) status = ADDriver::writeFloat64(pasynUser, value);
-            break;
+    if (function == ADAcquireTime) {
+        /* Prosilica uses integer microseconds */
+        status |= PvAttrUint32Set(this->PvHandle, "ExposureValue", (tPvUint32)(value * 1e6));
+    } else if (function == ADAcquirePeriod) {
+        /* Prosilica uses a frame rate in Hz */
+        if (value == 0.) value = .01;
+        status |= PvAttrFloat32Set(this->PvHandle, "FrameRate", (tPvFloat32)(1./value));
+    } else if (function == ADGain) {
+        /* Prosilica uses an integer value */
+        status |= PvAttrUint32Set(this->PvHandle, "GainValue", (tPvUint32)(value));
+    } else if (function == PSStrobe1Delay) {
+        /* Prosilica uses integer microseconds */
+        status |= PvAttrUint32Set(this->PvHandle, "Strobe1Delay", (tPvUint32)(value*1e6));
+    } else if (function == PSStrobe1Duration) {
+        /* Prosilica uses integer microseconds */
+        status |= PvAttrUint32Set(this->PvHandle, "Strobe1Duration", (tPvUint32)(value*1e6));
+    } else {
+        /* If this is not a parameter we have handled call the base class */
+        if (function < NUM_PS_PARAMS) status = ADDriver::writeFloat64(pasynUser, value);
     }
 
     /* Read the camera parameters and do callbacks */
     status |= readParameters();
     if (status) 
         asynPrint(pasynUser, ASYN_TRACE_ERROR, 
-              "%s:%s: error, status=%d function=%d, value=%f\n", 
-              driverName, functionName, status, function, value);
+              "%s:%s: error, status=%d function=%d, name=%s, value=%f\n", 
+              driverName, functionName, status, function, paramName, value);
     else        
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
-              "%s:%s: function=%d, value=%f\n", 
-              driverName, functionName, function, value);
+              "%s:%s: function=%d, name=%s, value=%f\n", 
+              driverName, functionName, function, paramName, value);
     return((asynStatus)status);
-}
-
-
-/** Sets pasynUser->reason to one of the enum values for the parameters defined for
-  * this class if the drvInfo field matches one the strings defined for it.
-  * If the parameter is not recognized by this class then calls ADDriver::drvUserCreate.
-  * Uses asynPortDriver::drvUserCreateParam.
-  * \param[in] pasynUser pasynUser structure that driver modifies
-  * \param[in] drvInfo String containing information about what driver function is being referenced
-  * \param[out] pptypeName Location in which driver puts a copy of drvInfo.
-  * \param[out] psize Location where driver puts size of param 
-  * \return Returns asynSuccess if a matching string was found, asynError if not found. */
-asynStatus prosilica::drvUserCreate(asynUser *pasynUser,
-                                       const char *drvInfo, 
-                                       const char **pptypeName, size_t *psize)
-{
-    asynStatus status;
-    //const char *functionName = "drvUserCreate";
-    
-    status = this->drvUserCreateParam(pasynUser, drvInfo, pptypeName, psize, 
-                                      PSDetParamString, NUM_PS_DET_PARAMS);
-
-    /* If not, then call the base class method, see if it is known there */
-    if (status) status = ADDriver::drvUserCreate(pasynUser, drvInfo, pptypeName, psize);
-    return(status);
 }
 
 /** Report status of the driver.
@@ -1288,7 +1229,7 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
   */
 prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory,
                      int priority, int stackSize)
-    : ADDriver(portName, 1, ADLastDriverParam, maxBuffers, maxMemory, 
+    : ADDriver(portName, 1, NUM_PS_PARAMS, maxBuffers, maxMemory, 
                0, 0,               /* No interfaces beyond those set in ADDriver.cpp */
                ASYN_CANBLOCK, 1,   /* ASYN_CANBLOCK=1, ASYN_MULTIDEVICE=0, autoConnect=1 */
                priority, stackSize), 
@@ -1297,6 +1238,34 @@ prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t 
 {
     int status = asynSuccess;
     static const char *functionName = "prosilica";
+
+    addParam(PSReadStatisticsString,    &PSReadStatistics);
+    addParam(PSDriverTypeString,        &PSDriverType);
+    addParam(PSFilterVersionString,     &PSFilterVersion);
+    addParam(PSFrameRateString,         &PSFrameRate);
+    addParam(PSFramesCompletedString,   &PSFramesCompleted);
+    addParam(PSFramesDroppedString,     &PSFramesDropped);
+    addParam(PSPacketsErroneousString,  &PSPacketsErroneous);
+    addParam(PSPacketsMissedString,     &PSPacketsMissed);
+    addParam(PSPacketsReceivedString,   &PSPacketsReceived);
+    addParam(PSPacketsRequestedString,  &PSPacketsRequested);
+    addParam(PSPacketsResentString,     &PSPacketsResent);
+    addParam(PSBadFrameCounterString,   &PSBadFrameCounter);
+    addParam(PSSyncIn1LevelString,      &PSSyncIn1Level);
+    addParam(PSSyncIn2LevelString,      &PSSyncIn2Level);
+    addParam(PSSyncOut1ModeString,      &PSSyncOut1Mode);
+    addParam(PSSyncOut1LevelString,     &PSSyncOut1Level);
+    addParam(PSSyncOut1InvertString,    &PSSyncOut1Invert);
+    addParam(PSSyncOut2ModeString,      &PSSyncOut2Mode);
+    addParam(PSSyncOut2LevelString,     &PSSyncOut2Level);
+    addParam(PSSyncOut2InvertString,    &PSSyncOut2Invert);
+    addParam(PSSyncOut3ModeString,      &PSSyncOut3Mode);
+    addParam(PSSyncOut3LevelString,     &PSSyncOut3Level);
+    addParam(PSSyncOut3InvertString,    &PSSyncOut3Invert);
+    addParam(PSStrobe1ModeString,       &PSStrobe1Mode);
+    addParam(PSStrobe1DelayString,      &PSStrobe1Delay);
+    addParam(PSStrobe1CtlDurationString,&PSStrobe1CtlDuration);
+    addParam(PSStrobe1DurationString,   &PSStrobe1Duration);
 
     /* There is a conflict with readline use of signals, don't use readline signal handlers */
 #ifdef linux
