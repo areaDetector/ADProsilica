@@ -8,6 +8,7 @@ prosilicaApp_registerRecordDeviceDriver(pdbbase)
 # The simplest way to determine the uniqueId of a camera is to run the Prosilica GigEViewer application, 
 # select the camera, and press the "i" icon on the bottom of the main window to show the camera information for this camera. 
 # The Unique ID will be displayed on the first line in the information window.
+#prosilicaConfig("PS1", 50110, 50, 200000000)
 prosilicaConfig("PS1", 51031, 50, 200000000)
 asynSetTraceIOMask("PS1",0,2)
 #asynSetTraceMask("PS1",0,255)
@@ -50,6 +51,12 @@ NDFileJPEGConfigure("PS1FileJPEG", 5, 0, "PS1", 0)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=JPEG1:,PORT=PS1FileJPEG,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDFile.template",      "P=13PS1:,R=JPEG1:,PORT=PS1FileJPEG,ADDR=0,TIMEOUT=1")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDFileJPEG.template",  "P=13PS1:,R=JPEG1:,PORT=PS1FileJPEG,ADDR=0,TIMEOUT=1")
+
+# Create a NeXus file saving plugin
+NDFileNexusConfigure("PS1FileNexus", 20, 0, "PS1", 0, 0, 80000)
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=Nexus1:,PORT=PS1FileNexus,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDFile.template",      "P=13PS1:,R=Nexus1:,PORT=PS1FileNexus,ADDR=0,TIMEOUT=1")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDFileNexus.template", "P=13PS1:,R=Nexus1:,PORT=PS1FileNexus,ADDR=0,TIMEOUT=1")
 
 # Create an ROI plugin
 NDROIConfigure("PS1ROI", 5, 0, "PS1", 0, 10, 20, -1)
