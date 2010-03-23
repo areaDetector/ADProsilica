@@ -94,6 +94,19 @@ NDStatsConfigure("STATS5", 20, 0, "ROI4", 0, -1, -1)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=Stats5:,  PORT=STATS5,ADDR=0,TIMEOUT=1,NDARRAY_PORT=ROI4,NDARRAY_ADDR=0")
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDStats.template",     "P=13PS1:,R=Stats5:,  PORT=STATS5,ADDR=0,TIMEOUT=1,HIST_SIZE=256")
 
+# Create a transform plugin
+NDTransformConfigure("TRANS1", 20, 0, "PS1", 0, -1, -1)
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=Trans1:,  PORT=TRANS1,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDTransform.template", "P=13PS1:,R=Trans1:,  PORT=TRANS1,ADDR=0,TIMEOUT=1")
+
+# Create an overlay plugin and 4 overlays
+NDOverlayConfigure("OVER1", 20, 0, "PS1", 0, 4, -1, -1)
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=Over1:,   PORT=OVER1,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDOverlay.template",   "P=13PS1:,R=Over1:0:, PORT=OVER1,ADDR=0,TIMEOUT=1")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDOverlay.template",   "P=13PS1:,R=Over1:1:, PORT=OVER1,ADDR=1,TIMEOUT=1")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDOverlay.template",   "P=13PS1:,R=Over1:2:, PORT=OVER1,ADDR=2,TIMEOUT=1")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDOverlay.template",   "P=13PS1:,R=Over1:3:, PORT=OVER1,ADDR=3,TIMEOUT=1")
+
 # Create 2 color conversion plugins
 NDColorConvertConfigure("CC1", 5, 0, "PS1", 0, 20, -1)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template",   "P=13PS1:,R=CC1:,  PORT=CC1,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
