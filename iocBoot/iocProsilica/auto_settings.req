@@ -32,6 +32,11 @@ file "NDPluginBase_settings.req",   P=$(P),  R=Stats4:
 file "NDStats_settings.req",        P=$(P),  R=Stats4:
 file "NDPluginBase_settings.req",   P=$(P),  R=Stats5:
 file "NDStats_settings.req",        P=$(P),  R=Stats5:
+file "NDPluginBase_settings.req",   P=$(P),  R=Over1:
+file "NDOverlayN_settings.req",     P=$(P),  R=Over1:0:
+file "NDOverlayN_settings.req",     P=$(P),  R=Over1:1:
+file "NDOverlayN_settings.req",     P=$(P),  R=Over1:2:
+file "NDOverlayN_settings.req",     P=$(P),  R=Over1:3:
 file "NDPluginBase_settings.req",   P=$(P),  R=CC1:
 file "NDColorConvert_settings.req", P=$(P),  R=CC1:
 file "NDPluginBase_settings.req",   P=$(P),  R=CC2:
