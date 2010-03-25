@@ -102,6 +102,7 @@ dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDTransform.template", "P=13PS1:,R=Tran
 # Create an overlay plugin with 8 overlays
 NDOverlayConfigure("OVER1", 20, 0, "PS1", 0, 8, -1, -1)
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDPluginBase.template","P=13PS1:,R=Over1:, PORT=OVER1,ADDR=0,TIMEOUT=1,NDARRAY_PORT=PS1,NDARRAY_ADDR=0")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDOverlay.template",   "P=13PS1:,R=Over1:, PORT=OVER1,ADDR=0,TIMEOUT=1")
 dbLoadTemplate("Overlay.substitutions")
 
 # Create 2 color conversion plugins
