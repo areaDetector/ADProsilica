@@ -29,6 +29,7 @@
 #include <cantProceed.h>
 #include <iocsh.h>
 #include <epicsExport.h>
+#include <epicsExit.h>
 
 #include "PvApi.h"
 #include "ImageLib.h"
@@ -53,6 +54,7 @@ public:
     virtual asynStatus writeFloat64(asynUser *pasynUser, epicsFloat64 value);
     void report(FILE *fp, int details);
     void frameCallback(tPvFrame *pFrame); /**< This should be private, but is called from C, must be public */
+    void shutdown(); /** This is called by epicsAtExit */
 
 protected:
     int PSReadStatistics;
@@ -201,6 +203,21 @@ static const char *PSStrobeModes[] = {
 #define PSStrobe1CtlDurationString   "PS_STROBE_1_CTL_DURATION"/* (asynInt32,    r/w) Strobe 1 controlled duration */
 #define PSStrobe1DurationString      "PS_STROBE_1_DURATION"    /* (asynFloat64,  r/w) Strobe 1 duration */
 
+static void c_shutdown(void* arg) {
+    prosilica *p = (prosilica*)arg;
+    p->shutdown();
+}
+ 
+void prosilica::shutdown() {
+    printf("Closing prosilica camera...");
+    if (this->PvHandle) {
+        PvCaptureQueueClear(this->PvHandle);
+        PvCaptureEnd(this->PvHandle);
+        PvCameraClose(this->PvHandle);
+    }
+    printf("OK\n");    
+}    
+
 /** Writes last image to disk as a TIFF file. */
 asynStatus prosilica::writeFile()
 {
@@ -294,8 +311,9 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     this->lock();
 
     pImage = (NDArray *)pFrame->Context[1];
-
-    if (pFrame->Status == ePvErrSuccess) {
+    
+    /* If we're out of memory, pImage will be NULL */
+    if (pImage && pFrame->Status == ePvErrSuccess) {
         /* The frame we just received has NDArray* in Context[1] */ 
         /* We save the most recent good image buffer so it can be used in the PSWriteFile
          * and readADImage functions.  Now release it. */
@@ -1296,6 +1314,9 @@ prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t 
                driverName, functionName, uniqueId);
         return;
     }
+    
+    /* Register the shutdown function for epicsAtExit */
+    epicsAtExit(c_shutdown, (void*)this);
         
 }
 
