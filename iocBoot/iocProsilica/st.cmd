@@ -7,6 +7,8 @@ prosilicaApp_registerRecordDeviceDriver(pdbbase)
 epicsEnvSet("PREFIX", "13PS1:")
 epicsEnvSet("PORT",   "PS1")
 epicsEnvSet("QSIZE",  "20")
+epicsEnvSet("XSIZE",  "1360")
+epicsEnvSet("YSIZE",  "1024")
 
 # The second parameter to the prosilicaConfig command is the uniqueId of the camera.
 # The simplest way to determine the uniqueId of a camera is to run the Prosilica GigEViewer application, 
