@@ -15,7 +15,8 @@ epicsEnvSet("YSIZE",  "1024")
 # select the camera, and press the "i" icon on the bottom of the main window to show the camera information for this camera. 
 # The Unique ID will be displayed on the first line in the information window.
 #prosilicaConfig("$(PORT)", 50110, 50, 200000000)
-prosilicaConfig("$(PORT)", 51031, 50, -1)
+#prosilicaConfig("$(PORT)", 51031, 50, -1)
+prosilicaConfig("$(PORT)", 101271, 50, -1)
 
 asynSetTraceIOMask("$(PORT)",0,2)
 #asynSetTraceMask("$(PORT)",0,255)
