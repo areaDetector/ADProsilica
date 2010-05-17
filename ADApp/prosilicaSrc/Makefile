@@ -40,7 +40,7 @@ prosilicaApp_LIBS += prosilica
 prosilicaApp_LIBS += NDPlugin ADBase netCDF
 prosilicaApp_LIBS_Linux += PvAPI ImageLib
 prosilicaApp_LIBS_WIN32 += PvAPI ImageLib
-prosilicaApp_LIBS += calc busy sscan autosave 
+prosilicaApp_LIBS += calc busy sscan autosave mca
 prosilicaApp_LIBS += asyn
 prosilicaApp_LIBS += $(EPICS_BASE_IOC_LIBS)
 
