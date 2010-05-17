@@ -9,14 +9,15 @@ epicsEnvSet("PORT",   "PS1")
 epicsEnvSet("QSIZE",  "20")
 epicsEnvSet("XSIZE",  "1360")
 epicsEnvSet("YSIZE",  "1024")
+epicsEnvSet("NCHANS", "2048")
 
 # The second parameter to the prosilicaConfig command is the uniqueId of the camera.
 # The simplest way to determine the uniqueId of a camera is to run the Prosilica GigEViewer application, 
 # select the camera, and press the "i" icon on the bottom of the main window to show the camera information for this camera. 
 # The Unique ID will be displayed on the first line in the information window.
 #prosilicaConfig("$(PORT)", 50110, 50, 200000000)
-#prosilicaConfig("$(PORT)", 51031, 50, -1)
-prosilicaConfig("$(PORT)", 101271, 50, -1)
+prosilicaConfig("$(PORT)", 51031, 50, -1)
+#prosilicaConfig("$(PORT)", 101271, 50, -1)
 
 asynSetTraceIOMask("$(PORT)",0,2)
 #asynSetTraceMask("$(PORT)",0,255)
