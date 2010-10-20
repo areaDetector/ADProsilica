@@ -32,7 +32,6 @@
 #include <epicsExit.h>
 
 #include "PvApi.h"
-#include "ImageLib.h"
 
 #include "ADDriver.h"
 
@@ -88,8 +87,7 @@ protected:
     #define LAST_PS_PARAM PSStrobe1Duration
 private:                                        
     /* These are the methods that are new to this class */
-    asynStatus writeFile();
-     asynStatus setPixelFormat();
+    asynStatus setPixelFormat();
     asynStatus setGeometry();
     asynStatus getGeometry();
     asynStatus readStats();
@@ -218,69 +216,6 @@ void prosilica::shutdown() {
     printf("OK\n");    
 }    
 
-/** Writes last image to disk as a TIFF file. */
-asynStatus prosilica::writeFile()
-{
-    int status = asynSuccess, tiffStatus;
-    char fullFileName[MAX_FILENAME_LEN];
-    int fileFormat;
-    NDArray *pImage = this->pArrays[0];
-    tPvFrame PvFrame, *pFrame=&PvFrame;
-    NDArrayInfo_t arrayInfo;
-    static const char *functionName = "writeFile";
-
-    if (!pImage) return asynError;
-    
-    /* Set all fields in frame to 0 */
-    memset(pFrame, 0, sizeof(tPvFrame));
-
-    status |= createFileName(MAX_FILENAME_LEN, fullFileName);
-    if (status) { 
-        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: error creating full file name, fullFileName=%s, status=%d\n", 
-              driverName, functionName, fullFileName, status);
-        return((asynStatus)status);
-    }
-    
-    /* Copy the data from our last image buffer to a frame buffer structure, which is
-     * required by ImageWriteTiff */
-    pFrame->Width = pImage->dims[0].size;
-    pFrame->Height = pImage->dims[1].size;
-    pFrame->ImageBuffer = pImage->pData;
-    pImage->getInfo(&arrayInfo);
-    pFrame->ImageBufferSize = arrayInfo.totalBytes;
-    pFrame->ImageSize = pFrame->ImageBufferSize;
-    
-    /* Note, this needs work because we need to support color models */
-    switch(pImage->dataType) {
-        case NDInt8:
-        case NDUInt8:
-            pFrame->Format = ePvFmtMono8;
-            pFrame->BitDepth = 8;
-            break;
-        case NDInt16:
-        case NDUInt16:
-            pFrame->Format = ePvFmtMono16;
-            pFrame->BitDepth = 16;
-            break;
-        default:
-            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
-                "%s:%s: error unsupported data type=%d\n",
-                driverName, functionName, pImage->dataType);
-            break;
-    }
-    
-    status |= getIntegerParam(NDFileFormat, &fileFormat);
-    /* We only support writing in TIFF format for now */
-    tiffStatus = ImageWriteTiff(fullFileName, pFrame);
-    if (tiffStatus != 1) {
-        status |= asynError;
-    } else {
-        status |= setStringParam(NDFullFileName, fullFileName);
-    }
-    return((asynStatus)status);
-}
-
 static void PVDECL frameCallbackC(tPvFrame *pFrame)
 {
     prosilica *pPvt = (prosilica *) pFrame->Context[0];
@@ -292,7 +227,6 @@ static void PVDECL frameCallbackC(tPvFrame *pFrame)
 void prosilica::frameCallback(tPvFrame *pFrame)
 {
     int status = asynSuccess;
-    int autoSave;
     int ndims, dims[2];
     int imageCounter;
     int arrayCallbacks;
@@ -315,8 +249,8 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     /* If we're out of memory, pImage will be NULL */
     if (pImage && pFrame->Status == ePvErrSuccess) {
         /* The frame we just received has NDArray* in Context[1] */ 
-        /* We save the most recent good image buffer so it can be used in the PSWriteFile
-         * and readADImage functions.  Now release it. */
+        /* We save the most recent good image buffer so it can be used in the
+         * readADImage function.  Now release it. */
         if (this->pArrays[0]) this->pArrays[0]->release();
         this->pArrays[0] = pImage;
         /* Set the properties of the image to those of the current frame */
@@ -443,10 +377,6 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         getIntegerParam(NDArrayCounter, &imageCounter);
         imageCounter++;
         setIntegerParam(NDArrayCounter, imageCounter);
-
-        /* If autoSave is set then save the image */
-        status = getIntegerParam(NDAutoSave, &autoSave);
-        if (autoSave) status = writeFile();
 
         asynPrintIO(this->pasynUserSelf, ASYN_TRACEIO_DRIVER, 
             (const char *)this->pArrays[0]->pData, this->pArrays[0]->dataSize,
@@ -1097,21 +1027,6 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
             status |= PvAttrEnumSet(this->PvHandle, "Strobe1Mode", PSStrobeModes[value]);
     } else if (function == PSStrobe1CtlDuration) {
             status |= PvAttrEnumSet(this->PvHandle, "Strobe1ControlledDuration", value ? "On":"Off");
-    } else if (function == NDWriteFile) {
-            if (value) {
-                /* Call the callbacks so the status changes */
-                callParamCallbacks();
-                if (this->pArrays[0]) {
-                    status = writeFile();
-                } else {
-                    asynPrint(pasynUser, ASYN_TRACE_ERROR,
-                        "%s:%s: ERROR, no valid array to write",
-                        driverName, functionName);
-                    status = asynError;
-                }
-                /* Set the flag back to 0, since this could be a busy record */
-                setIntegerParam(NDWriteFile, 0);
-            }
     } else if ((function == NDDataType) ||
                 (function == NDColorMode)) {
             status = setPixelFormat();
