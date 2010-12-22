@@ -98,7 +98,7 @@ private:
     /* These items are specific to the Prosilica driver */
     tPvHandle PvHandle;                /* GenericPointer for the Prosilica PvAPI library */
     unsigned long uniqueId;
-    tPvCameraInfo PvCameraInfo;
+    tPvCameraInfoEx PvCameraInfo;
     tPvFrame PvFrames[MAX_FRAMES];
     size_t maxFrameSize;
     int framesRemaining;
@@ -799,7 +799,7 @@ asynStatus prosilica::connectCamera()
     /* First disconnect from the camera */
     disconnectCamera();
     
-    status = ::PvCameraInfo(this->uniqueId, &this->PvCameraInfo);
+    status = PvCameraInfoEx(this->uniqueId, &this->PvCameraInfo, sizeof(this->PvCameraInfo));
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
               "%s:%s: Cannot find camera %d\n", 
@@ -809,8 +809,8 @@ asynStatus prosilica::connectCamera()
 
     if ((this->PvCameraInfo.PermittedAccess & ePvAccessMaster) == 0) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: Cannot get control of camera %d\n", 
-               driverName, functionName, this->uniqueId);
+              "%s:%s: Cannot get control of camera %d, access flags=%lx\n", 
+               driverName, functionName, this->uniqueId, this->PvCameraInfo.PermittedAccess);
         return asynError;
     }
 
@@ -895,7 +895,7 @@ asynStatus prosilica::connectCamera()
 
     /* Set some initial values for other parameters */
     status =  setStringParam (ADManufacturer, "Prosilica");
-    status |= setStringParam (ADModel, this->PvCameraInfo.DisplayName);
+    status |= setStringParam (ADModel, this->PvCameraInfo.ModelName);
     status |= setIntegerParam(ADSizeX, this->sensorWidth);
     status |= setIntegerParam(ADSizeY, this->sensorHeight);
     status |= setIntegerParam(ADMaxSizeX, this->sensorWidth);
@@ -1107,19 +1107,23 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
   */
 void prosilica::report(FILE *fp, int details)
 {
-    tPvCameraInfo cameraInfo[20]; 
+    tPvCameraInfoEx cameraInfo[20], *pInfo; 
     int i;
     unsigned long numReturned, numTotal;
     
-    numReturned = PvCameraList(cameraInfo, 20, &numTotal);
+    numReturned = PvCameraListEx(cameraInfo, 20, &numTotal, sizeof(tPvCameraInfoEx));
 
     fprintf(fp, "Prosilica camera %s Unique ID=%d\n", 
             this->portName, (int)this->uniqueId);
+    pInfo = &this->PvCameraInfo;
     if (details > 0) {
-        fprintf(fp, "  ID:                %lu\n", this->PvCameraInfo.UniqueId);
+        fprintf(fp, "  ID:                %lu\n", pInfo->UniqueId);
         fprintf(fp, "  IP address:        %s\n",  this->IPAddress);
-        fprintf(fp, "  Serial number:     %s\n",  this->PvCameraInfo.SerialString);
-        fprintf(fp, "  Model:             %s\n",  this->PvCameraInfo.DisplayName);
+        fprintf(fp, "  Serial number:     %s\n",  pInfo->SerialNumber);
+        fprintf(fp, "  Camera name:       %s\n",  pInfo->CameraName);
+        fprintf(fp, "  Model:             %s\n",  pInfo->ModelName);
+        fprintf(fp, "  Firmware version:  %s\n",  pInfo->FirmwareVersion);
+        fprintf(fp, "  Access flags:      %lx\n", pInfo->PermittedAccess);
         fprintf(fp, "  Sensor type:       %s\n",  this->sensorType);
         fprintf(fp, "  Sensor bits:       %d\n",  (int)this->sensorBits);
         fprintf(fp, "  Sensor width:      %d\n",  (int)this->sensorWidth);
@@ -1127,9 +1131,16 @@ void prosilica::report(FILE *fp, int details)
         fprintf(fp, "  Frame buffer size: %d\n",  (int)this->PvFrames[0].ImageBufferSize);
         fprintf(fp, "  Time stamp freq:   %d\n",  (int)this->timeStampFrequency);
         fprintf(fp, "\n");
-        fprintf(fp, "List of all Prosilica cameras found, (total=%d):\n", (int)numReturned);
+        fprintf(fp, "List of all Prosilica cameras found (total=%d):\n", (int)numReturned);
         for (i=0; i<(int)numReturned; i++) {
-            fprintf(fp, "    ID: %d\n", (int)cameraInfo[i].UniqueId);
+            pInfo = &cameraInfo[i];
+            fprintf(fp, "  ID:                %lu\n", pInfo->UniqueId);
+            fprintf(fp, "  Serial number:     %s\n",  pInfo->SerialNumber);
+            fprintf(fp, "  Camera name:       %s\n",  pInfo->CameraName);
+            fprintf(fp, "  Model:             %s\n",  pInfo->ModelName);
+            fprintf(fp, "  Firmware version:  %s\n",  pInfo->FirmwareVersion);
+            fprintf(fp, "  Access flags:      %lx\n", pInfo->PermittedAccess);
+            fprintf(fp, "\n");
         }
     }
 
@@ -1217,8 +1228,8 @@ prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t 
         PvApiInitialized = 1;
     }
     
-    /* It appears to be necessary to wait a little for the PvAPI library to find the cameras */
-    epicsThreadSleep(0.2);
+    /* Need to wait a short while for the PvAPI library to find the cameras (0.2 seconds is not long enough in 1.24) */
+    epicsThreadSleep(1.0);
     
     /* Try to connect to the camera.  
      * It is not a fatal error if we cannot now, the camera may be off or owned by
