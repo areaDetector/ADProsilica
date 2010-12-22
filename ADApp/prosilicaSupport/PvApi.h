@@ -1,6 +1,6 @@
 /*
 |==============================================================================
-| Copyright (C) 2006-2007 Prosilica.  All Rights Reserved.
+| Copyright (C) 2006-2010 Prosilica.  All Rights Reserved.
 |
 | Redistribution of this header file, in original or modified form, without
 | prior written consent of Prosilica is prohibited.
@@ -79,6 +79,8 @@
 | 27/Jun/07     Added function PvCaptureAdjustPacketSize
 | 09/Jul/07     Added error code ePvErrFirewall
 | 17/Aug/07     Added new pixel formats
+| 26/Feb/09     Release 1.22
+| 05/Apr/10     Added support for int64 and boolean attributes
 |==============================================================================
 */
 
@@ -174,7 +176,26 @@ typedef enum
 
 
 //
-// Camera information type.
+// Camera information type (extended)
+//
+typedef struct
+{
+    unsigned long		StructVer;	         // Version of this structure
+    //---- Version 1 ----
+    unsigned long       UniqueId;            // Unique value for each camera
+    char                CameraName[32];      // People-friendly camera name (usually part name)
+    char	            ModelName[32];       // Name of camera part
+    char                PartNumber[32];      // Manufacturer's part number
+    char                SerialNumber[32];    // Camera's serial number
+    char				FirmwareVersion[32]; // Camera's firmware version
+    unsigned long       PermittedAccess;     // A combination of tPvAccessFlags
+    unsigned long       InterfaceId;         // Unique value for each interface or bus
+    tPvInterface        InterfaceType;       // Interface type; see tPvInterface
+
+} tPvCameraInfoEx;
+
+//
+// Camera information type (deprecated)
 //
 typedef struct
 {
@@ -189,7 +210,6 @@ typedef struct
     unsigned long       _reserved[4];     // Always zero
 
 } tPvCameraInfo;
-
 
 //
 // IP configuration mode for ethernet cameras.
@@ -261,6 +281,36 @@ typedef void (PVDECL *tPvLinkCallback)(void* Context,
                                        tPvLinkEvent Event,
                                        unsigned long UniqueId);
 
+//----- Camera-Event Callback -----------------------------------------------
+
+//
+// Camera event type
+//
+typedef struct
+{
+    unsigned long EventId;      // Event ID
+    unsigned long TimestampLo;  // Time stamp, lower 32-bits
+    unsigned long TimestampHi;  // Time stamp, upper 32-bits
+    unsigned long Data[4];      // Event data
+    const void*   ExtraData;    // Event extra-data (NULL if none)
+
+} tPvCameraEvent;
+
+//
+// Camera-event Callback type
+//
+// Arguments:
+//
+//  [i] void* Context,                     Context, as provided to PvEventCallbackRegister
+//  [i] tPvHandle Camera,                  Handle of camera which sent the event
+//  [i] const tPvCameraEvent* EventList,   First event in list.  This list exists only for
+//                                         the duration of the callback.  If you need it, copy it!
+//  [i] unsigned long EventListLength      Number of events in EventList
+//
+typedef void (PVDECL *tPvCameraEventCallback)(void* Context,
+                                              tPvHandle Camera,
+                                              const tPvCameraEvent* EventList,
+                                              unsigned long EventListLength);
 
 //----- Image Capture ---------------------------------------------------------
 
@@ -281,6 +331,8 @@ typedef enum
     ePvFmtBgr24         = 9,            // BGR, 8 bits x 3
     ePvFmtRgba32        = 10,           // RGBA, 8 bits x 4
     ePvFmtBgra32        = 11,           // BGRA, 8 bits x 4
+    ePvFmtMono12Packed  = 12,           // Monochrome, 12 bits, 
+    ePvFmtBayer12Packed = 13,           // Bayer-color, 12 bits, packed
     __ePvFmt_force_32   = 0xFFFFFFFF
 
 } tPvImageFormat;
@@ -357,13 +409,17 @@ typedef void (PVDECL *tPvFrameCallback)(tPvFrame* Frame);
 
 
 #if defined(_M_IX86) || defined(_x86) || defined(_WIN64) || defined(_x64)
+typedef long            tPvInt32;   // 32-bit signed integer
+typedef unsigned long   tPvUint32;  // 32-bit unsigned integer
+typedef float           tPvFloat32; // IEEE 32-bit float
+typedef long long       tPvInt64;   // 64-bit signed integer
+typedef unsigned char   tPvBoolean; // boolean
+#elif defined(_ppc) || defined(_arm) || defined(_msa)
 typedef long            tPvInt32;   // 32-bit integer
 typedef unsigned long   tPvUint32;  // 32-bit unsigned integer
 typedef float           tPvFloat32; // IEEE 32-bit float
-#elif defined(_ppc) || defined(_arm)
-typedef long            tPvInt32;   // 32-bit integer
-typedef unsigned long   tPvUint32;  // 32-bit unsigned integer
-typedef float           tPvFloat32; // IEEE 32-bit float
+typedef long long       tPvInt64;   // 64-bit signed integer
+typedef unsigned char   tPvBoolean; // boolean
 #else
 #error Define specific data types for your platform.
 #endif
@@ -388,6 +444,8 @@ typedef enum
     ePvDatatypeEnum     = 4,
     ePvDatatypeUint32   = 5,
     ePvDatatypeFloat32  = 6,
+    ePvDatatypeInt64    = 7,
+    ePvDatatypeBoolean  = 8,
     __ePvDatatypeforce_32= 0xFFFFFFFF
 
 } tPvDatatype;
@@ -461,6 +519,24 @@ void PVDECL PvVersion(unsigned long* pMajor,unsigned long* pMinor);
  *               ePvErrInternalFault,   an internal fault occurred
  */
 tPvErr PVDECL PvInitialize(void);
+
+/*
+ * Function:  PvInitializeNoDiscovery()
+ *
+ * Purpose:   Initialize the PvApi module.  This must be called before any
+ *            other PvApi function is run. This version is intended to be used
+ *            only when the camera discovery via broadcast is unwanted.
+ *
+ * Arguments: none
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *
+ *               ePvErrResources,       resources requested from the OS were not
+ *                                      available           
+ *               ePvErrInternalFault,   an internal fault occurred
+ */
+tPvErr PVDECL PvInitializeNoDiscovery(void);
 
 
 /*
@@ -537,9 +613,31 @@ tPvErr PVDECL PvLinkCallbackUnRegister(tPvLinkCallback Callback,
 //----- Camera Enumeration & Information --------------------------------------
 
 /*
+ * Function:  PvCameraListEx()
+ *
+ * Purpose:   List all the cameras currently visible to PvApi (extended)
+ *
+ * Arguments:
+ *
+ * [OUT] tPvCameraInfoEx* pList,        Array of tPvCameraInfo, allocated by
+ *                                      the caller.  The camera list is copied here.
+ * [ IN] unsigned long ListLength,      Length of the caller's pList array
+ * [OUT] unsigned long* pConnectedNum,  Number of cameras found (may be more
+ *                                      than ListLength!) returned here.
+ *                                      May be NULL.
+ * [ IN] unsigned long StructSize,      Size of tPvCameraInfoEx (sizeof(tPvCameraInfoEx))
+ *
+ * Return:    Number of pList entries filled, up to ListLength.
+ */
+unsigned long PVDECL PvCameraListEx(tPvCameraInfoEx* pList,
+                                    unsigned long ListLength,
+                                    unsigned long* pConnectedNum,
+                                    unsigned long StructSize);
+
+/*
  * Function:  PvCameraList()
  *
- * Purpose:   List all the cameras currently visible to PvApi
+ * Purpose:   List all the cameras currently visible to PvApi (deprecated)
  *
  * Arguments:
  *
@@ -572,11 +670,35 @@ unsigned long PVDECL PvCameraList(tPvCameraInfo* pList,
  */
 unsigned long PVDECL PvCameraCount(void);
 
+/*
+ * Function:  PvCameraInfoEx()
+ *
+ * Purpose:   Retreive information on a given camera (extended)
+ *
+ * Arguments:
+ *
+ * [ IN] unsigned long UniqueId,    Unique ID of the camera
+ * [OUT] tPvCameraInfExo* pInfo,    Structure where the information will be copied
+ * [ IN] unsigned long StructSize,  Size of tPvCameraInfoEx (sizeof(tPvCameraInfoEx))
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *
+ *               ePvErrNotFound,        the camera was not found (unplugged)
+ *               ePvErrUnplugged,       the camera was found but unplugged during the
+ *                                      function call
+ *               ePvErrBadParameter,    a valid pointer for pInfo was not supplied
+ *               ePvErrResources,       resources requested from the OS were not
+ *                                      available
+ *               ePvErrInternalFault,   an internal fault occurred
+ *               ePvErrBadSequence,     API isn't initialized
+ */
+tPvErr PVDECL PvCameraInfoEx(unsigned long UniqueId,tPvCameraInfoEx* pInfo,unsigned long StructSize);
 
 /*
  * Function:  PvCameraInfo()
  *
- * Purpose:   Retreive information on a given camera
+ * Purpose:   Retreive information on a given camera (deprecated)
  *
  * Arguments:
  *
@@ -598,13 +720,45 @@ unsigned long PVDECL PvCameraCount(void);
  */
 tPvErr PVDECL PvCameraInfo(unsigned long UniqueId, tPvCameraInfo* pInfo);
 
+/*
+ * Function:  PvCameraInfoByAddrEx()
+ *
+ * Purpose:   Retreive information on a camera, by IP address.  This function
+ *            is required if the ethernet camera is not on the local ethernet
+ *            network. (extended)
+ *
+ * Arguments:
+ *
+ * [ IN] unsigned long IpAddr,          IP address of camera, in network byte order.
+ * [OUT] tPvCameraInfo* pInfo,          The camera information will be copied here.
+ * [OUT] tPvIpSettings* pIpSettings,    The IP settings will be copied here; NULL pointer OK.
+ * [ IN] unsigned long StructSize,      Size of tPvCameraInfoEx (sizeof(tPvCameraInfoEx))
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *
+ *               ePvErrNotFound,        the camera was not found
+ *               ePvErrResources,       resources requested from the OS were not
+ *                                      available
+ *               ePvErrInternalFault,   an internal fault occurred
+ *               ePvErrBadSequence,     API isn't initialized
+ *               ePvErrBadParameter,    pIpSettings->size is invalid
+ *
+ * The specified camera may not be visible to PvCameraList(); it might be on a
+ * different ethernet network.  In this case, communication with the camera is
+ * routed to the local gateway.
+ */
+tPvErr PVDECL PvCameraInfoByAddrEx(unsigned long IpAddr,
+                                   tPvCameraInfoEx* pInfo,
+                                   tPvIpSettings* pIpSettings,
+                                   unsigned long StructSize);
 
 /*
  * Function:  PvCameraInfoByAddr()
  *
  * Purpose:   Retreive information on a camera, by IP address.  This function
  *            is required if the ethernet camera is not on the local ethernet
- *            network.
+ *            network. (deprecated)
  *
  * Arguments:
  *
@@ -634,11 +788,37 @@ tPvErr PVDECL PvCameraInfoByAddr(unsigned long IpAddr,
                                  tPvIpSettings* pIpSettings);
 
 /*
+ * Function:  PvCameraListUnreachableEx()
+ *
+ * Purpose:   List all the cameras currently inaccessable by PvApi.  This lists
+ *            the ethernet cameras which are connected to the local ethernet
+ *            network, but are on a different subnet. (extended)
+ *
+ * Arguments:
+ *
+ * [OUT] tPvCameraInfo* pList,          Array of tPvCameraInfo, allocated by
+ *                                      the caller.  The camera list is
+ *	                                    copied here.
+ * [ IN] unsigned long ListLength,      Length of the caller's pList array
+ * [OUT] unsigned long* pConnectedNum,  Number of cameras found (may be more
+ *                                      than ListLength!) returned here.
+ *                                      May be NULL.
+ * [ IN] unsigned long StructSize,      Size of tPvCameraInfoEx (sizeof(tPvCameraInfoEx))
+ *
+ * Return:    Number of pList entries filled, up to ListLength.
+ */
+unsigned long PVDECL PvCameraListUnreachableEx(tPvCameraInfoEx* pList,
+                                               unsigned long ListLength,
+                                               unsigned long* pConnectedNum,
+                                               unsigned long StructSize);
+
+
+/*
  * Function:  PvCameraListUnreachable()
  *
  * Purpose:   List all the cameras currently inaccessable by PvApi.  This lists
  *            the ethernet cameras which are connected to the local ethernet
- *            network, but are on a different subnet.
+ *            network, but are on a different subnet. (deprecated)
  *
  * Arguments:
  *
@@ -1237,6 +1417,33 @@ tPvErr PVDECL PvAttrRangeFloat32(tPvHandle Camera,
                                  tPvFloat32* pMin,
                                  tPvFloat32* pMax);
 
+/*
+ * Function:  PvAttrRangeInt64()
+ *
+ * Purpose:   Get the value range for a int64 attribute.
+ *
+ * Arguments:
+ *
+ * [ IN] tPvHandle Camera,          Handle to the camera 
+ * [ IN] const char* Name,          Attribute name 
+ * [OUT] tPvInt64* pMin,            Minimum value returned here
+ * [OUT] tPvInt64* pMax,            Maximum value returned here
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *              
+ *               ePvErrBadHandle,       the handle of the camera is invalid
+ *               ePvErrUnplugged,       the camera has been unplugged 
+ *               ePvErrNotFound,        the requested attribute doesn't exist
+ *               ePvErrWrongType,       the requested attribute is not of the correct type
+ *               ePvBadParameter,       a valid pointer for pMin or pMax was not supplied
+ *               ePvErrInternalFault,   an internal fault occurred
+ *               ePvErrBadSequence,     API isn't initialized
+ */
+tPvErr PVDECL PvAttrRangeInt64(tPvHandle Camera,
+                               const char* Name,
+                               tPvInt64* pMin,
+                               tPvInt64* pMax);
 
 /*
  * Function:  PvCommandRun()
@@ -1494,6 +1701,167 @@ tPvErr PVDECL PvAttrFloat32Get(tPvHandle Camera,
 tPvErr PVDECL PvAttrFloat32Set(tPvHandle Camera,
                                const char* Name,
                                tPvFloat32 Value);
+
+/*
+ * Function:  PvAttrInt64Get()
+ *
+ * Purpose:   Get the value of a int64 attribute.
+ *
+ * Arguments:
+ *
+ * [ IN] tPvHandle Camera,          Handle to the camera 
+ * [ IN] const char* Name,          Attribute name 
+ * [OUT] tPvInt64* pValue,          Value is returned here
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *              
+ *               ePvErrBadHandle,       the handle of the camera is invalid
+ *               ePvErrUnplugged,       the camera has been unplugged 
+ *               ePvErrNotFound,        the requested attribute doesn't exist
+ *               ePvErrWrongType,       the requested attribute is not of the correct type
+ *               ePvBadParameter,       a valid pointer for pValue was not supplied
+ *               ePvErrInternalFault,   an internal fault occurred
+ *               ePvErrBadSequence,     API isn't initialized
+ */
+tPvErr PVDECL PvAttrInt64Get(tPvHandle Camera,
+                             const char* Name,
+                             tPvInt64* pValue);
+
+
+/*
+ * Function:  PvAttrInt64Set()
+ *
+ * Purpose:   Set the value of a int64 attribute.
+ *
+ * Arguments:
+ *
+ * [ IN] tPvHandle Camera,          Handle to the camera 
+ * [ IN] const char* Name,          Attribute name 
+ * [ IN] tPvInt64 Value,            Value to set
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *              
+ *               ePvErrBadHandle,       the handle of the camera is invalid
+ *               ePvErrUnplugged,       the camera has been unplugged 
+ *               ePvErrNotFound,        the requested attribute doesn't exist
+ *               ePvErrWrongType,       the requested attribute is not of the correct type
+ *               ePvErrForbidden,       the requested attribute forbid this operation
+ *               ePvErrOutOfRange,      the supplied value is out of range
+ *               ePvErrInternalFault,   an internal fault occurred
+ *               ePvErrBadSequence,     API isn't initialized
+ */
+tPvErr PVDECL PvAttrInt64Set(tPvHandle Camera,
+                              const char* Name,
+                              tPvInt64 Value);
+                              
+/*
+ * Function:  PvAttrBooleanGet()
+ *
+ * Purpose:   Get the value of a boolean attribute.
+ *
+ * Arguments:
+ *
+ * [ IN] tPvHandle Camera,          Handle to the camera 
+ * [ IN] const char* Name,          Attribute name 
+ * [OUT] tPvBoolean* pValue,        Value is returned here
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *              
+ *               ePvErrBadHandle,       the handle of the camera is invalid
+ *               ePvErrUnplugged,       the camera has been unplugged 
+ *               ePvErrNotFound,        the requested attribute doesn't exist
+ *               ePvErrWrongType,       the requested attribute is not of the correct type
+ *               ePvBadParameter,       a valid pointer for pValue was not supplied
+ *               ePvErrInternalFault,   an internal fault occurred
+ *               ePvErrBadSequence,     API isn't initialized
+ */
+tPvErr PVDECL PvAttrBooleanGet(tPvHandle Camera,const char* Name,tPvBoolean* pValue);
+
+
+/*
+ * Function:  PvAttrBooleanSet()
+ *
+ * Purpose:   Set the value of a boolean attribute.
+ *
+ * Arguments:
+ *
+ * [ IN] tPvHandle Camera,          Handle to the camera 
+ * [ IN] const char* Name,          Attribute name 
+ * [ IN] tPvBoolean Value,          Value to set
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *              
+ *               ePvErrBadHandle,       the handle of the camera is invalid
+ *               ePvErrUnplugged,       the camera has been unplugged 
+ *               ePvErrNotFound,        the requested attribute doesn't exist
+ *               ePvErrWrongType,       the requested attribute is not of the correct type
+ *               ePvErrForbidden,       the requested attribute forbid this operation
+ *               ePvErrOutOfRange,      the supplied value is out of range
+ *               ePvErrInternalFault,   an internal fault occurred
+ *               ePvErrBadSequence,     API isn't initialized
+ */
+tPvErr PVDECL PvAttrBooleanSet(tPvHandle Camera,const char* Name,tPvBoolean Value);
+
+//----- Camera event callback -------------------------------------------------
+
+/*
+ * Function:  PvCameraEventCallbackRegister()
+ *
+ * Purpose:   Register a callback for camera events.  The callback will receive
+ *            all events for the camera.
+ *
+ * Arguments:
+ *
+ * [ IN] tPvHandle Camera			        Handle to the camera
+ * [ IN] tPvCameraEventCallback Callback,   Callback function to run when an event occurs
+ * [ IN] void* Context                      For your use: Context is passed to your
+ *                                          callback function
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *
+ *               ePvErrResources,       resources requested from the OS were not
+ *                                      available
+ *               ePvErrBadSequence,     API isn't initialized
+ *
+ * The events generated by a camera are controlled by the attribute system.
+ *
+ * Here's the rules:
+ *   - Multiple callback functions may be registered for the same camera
+ *   - The same callback function may be shared by different cameras
+ *
+ * The callback functions are called from a thread within PvApi.  The callbacks
+ * are sequenced; i.e. they will not be called simultaneously.
+ *
+ * Use PvCameraEventCallbackUnRegister() to stop receiving callbacks.
+ */
+tPvErr PVDECL PvCameraEventCallbackRegister(tPvHandle Camera,
+                                            tPvCameraEventCallback Callback,
+                                            void* Context);
+
+/*
+ * Function:  PvCameraEventCallbackUnRegister()
+ *
+ * Purpose:   Unregister a callback for camera events.
+ *
+ * Arguments:
+ *
+ * [ IN] tPvHandle Camera		          Handle to the camera
+ * [ IN] tPvCameraEventCallback Callback, Callback function previously registered
+ *
+ * Return:    ePvErrSuccess if no error, otherwise likely to be any of the
+ *            following error codes:
+ *
+ *               ePvErrNotFound,        registered callback was not found
+ *               ePvErrResources,       resources requested from the OS were not
+ *                                      available
+ *               ePvErrBadSequence,     API isn't initialized
+ */
+tPvErr PVDECL PvCameraEventCallbackUnRegister(tPvHandle Camera,tPvCameraEventCallback Callback);
 
 //----- Utility ---------------------------------------------------------------
 
