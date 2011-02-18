@@ -14,10 +14,12 @@ endif
 
 LIBRARY_IOC_WIN32 += prosilica
 LIBRARY_IOC_Linux += prosilica
+LIBRARY_IOC_Darwin += prosilica
 LIB_SRCS += prosilica.cpp
 
 PROD_IOC_WIN32 += prosilicaApp
 PROD_IOC_Linux += prosilicaApp
+PROD_IOC_Darwin += prosilicaApp
 
 # <name>.dbd will be created from <name>Include.dbd
 DBD += prosilicaApp.dbd
