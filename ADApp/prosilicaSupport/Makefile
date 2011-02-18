@@ -28,6 +28,9 @@ endif
 ifeq ($(T_A), linux-x86_64) 
 LIB_INSTALLS_Linux += ../os/linux-x86_64/libPvAPI.a
 endif
+ifeq ($(T_A), darwin-x86)
+LIB_INSTALLS_Darwin += ../os/darwin-x86/libPvAPI.a
+endif
 
 #=============================
 
