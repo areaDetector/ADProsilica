@@ -99,7 +99,7 @@ extern "C" {
         #ifdef _MSC_VER
                 #define PVDECL           __stdcall
         #else
-                #if defined(_LINUX) || defined(_QNX) || defined(_OSX)
+                #if defined(_LINUX) || defined(_QNX) || defined(_OSX) || defined(__APPLE__)
                         #define PVDECL
                 #else
                         #error Define PVDECL to be your compiler keyword for "standard call"
@@ -408,7 +408,7 @@ typedef void (PVDECL *tPvFrameCallback)(tPvFrame* Frame);
 //----- Attributes ------------------------------------------------------------
 
 
-#if defined(_M_IX86) || defined(_x86) || defined(_WIN64) || defined(_x64)
+#if defined(_M_IX86) || defined(_x86) || defined(_WIN64) || defined(_x64) || defined(__i386__)
 typedef long            tPvInt32;   // 32-bit signed integer
 typedef unsigned long   tPvUint32;  // 32-bit unsigned integer
 typedef float           tPvFloat32; // IEEE 32-bit float
