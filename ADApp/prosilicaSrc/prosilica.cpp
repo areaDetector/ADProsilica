@@ -99,7 +99,7 @@ private:
     tPvHandle PvHandle;                /* GenericPointer for the Prosilica PvAPI library */
     unsigned long uniqueId;
     tPvCameraInfoEx PvCameraInfo;
-    tPvFrame PvFrames[MAX_FRAMES];
+    tPvFrame *PvFrames;
     size_t maxFrameSize;
     int framesRemaining;
     char sensorType[20];
@@ -205,15 +205,16 @@ static void c_shutdown(void* arg) {
     prosilica *p = (prosilica*)arg;
     p->shutdown();
 }
- 
+
 void prosilica::shutdown() {
-    printf("Closing prosilica camera...");
+    printf("Closing Prosilica camera...");
     if (this->PvHandle) {
         PvCaptureQueueClear(this->PvHandle);
         PvCaptureEnd(this->PvHandle);
         PvCameraClose(this->PvHandle);
     }
-    printf("OK\n");    
+    PvUnInitialize();
+    printf("OK\n");
 }    
 
 static void PVDECL frameCallbackC(tPvFrame *pFrame)
@@ -1215,6 +1216,10 @@ prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t 
 #ifdef linux
     rl_catch_signals = 0;
 #endif
+
+    /* Create the PvFrames buffer.  Note that these structures must be set to 0! */
+    PvFrames = (tPvFrame *)calloc(MAX_FRAMES, sizeof(tPvFrame));
+
     /* Initialize the Prosilica PvAPI library 
      * We get an error if we call this twice, so we need a global flag to see if 
      * it's already been done.*/
