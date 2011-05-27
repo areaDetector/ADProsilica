@@ -14,9 +14,9 @@ ifeq ($(T_A), win32-x86)
 LIB_INSTALLS_WIN32    += ../os/win32-x86/PvAPI.lib
 BIN_INSTALLS_WIN32    += ../os/win32-x86/PvAPI.dll
 endif
-ifeq ($(T_A), win32-x86_64)
-LIB_INSTALLS_WIN32    += ../os/win32-x86_64/PvAPI.lib
-BIN_INSTALLS_WIN32    += ../os/win32-x86_64/PvAPI.dll
+ifeq ($(T_A), windows-x64)
+LIB_INSTALLS_WIN32    += ../os/windows-x64/PvAPI.lib
+BIN_INSTALLS_WIN32    += ../os/windows-x64/PvAPI.dll
 endif
 ifeq ($(T_A),cygwin-x86)
 LIB_INSTALLS_cygwin32    += ../os/win32-x86/PvAPI.lib
