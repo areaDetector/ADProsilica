@@ -10,25 +10,25 @@ INC += PvApi.h
 
 # Note, the following files were manually copied from the Prosilica GigESDK/bin-pc directory
 # to this directory after building
-ifeq ($(T_A), win32-x86)
+ifeq (win32-x86, $(findstring win32-x86, $(T_A)))
 LIB_INSTALLS_WIN32    += ../os/win32-x86/PvAPI.lib
 BIN_INSTALLS_WIN32    += ../os/win32-x86/PvAPI.dll
-endif
-ifeq ($(T_A), windows-x64)
+
+else ifeq (windows-x64, $(findstring windows-x64, $(T_A)))
 LIB_INSTALLS_WIN32    += ../os/windows-x64/PvAPI.lib
 BIN_INSTALLS_WIN32    += ../os/windows-x64/PvAPI.dll
-endif
-ifeq ($(T_A),cygwin-x86)
+
+else ifeq (cygwin-x86, $(findstring cygwin-x86, $(T_A)))
 LIB_INSTALLS_cygwin32    += ../os/win32-x86/PvAPI.lib
 BIN_INSTALLS_cygwin32    += ../os/win32-x86/PvAPI.dll
-endif
-ifeq ($(T_A), linux-x86)
-LIB_INSTALLS_Linux += ../os/linux-x86/libPvAPI.a
-endif
-ifeq ($(T_A), linux-x86_64) 
+
+else ifeq (linux-x86_64, $(findstring linux-x86_64, $(T_A)))
 LIB_INSTALLS_Linux += ../os/linux-x86_64/libPvAPI.a
-endif
-ifeq ($(T_A), darwin-x86)
+
+else ifeq (linux-x86, $(findstring linux-x86, $(T_A)))
+LIB_INSTALLS_Linux += ../os/linux-x86/libPvAPI.a
+
+else ifeq (darwin-x86, $(findstring darwin-x86, $(T_A)))
 LIB_INSTALLS_Darwin += ../os/darwin-x86/libPvAPI.a
 endif
 
