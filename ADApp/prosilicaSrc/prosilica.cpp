@@ -27,6 +27,7 @@
 #include <epicsStdio.h>
 #include <epicsMutex.h>
 #include <cantProceed.h>
+#include <osiSock.h>
 #include <iocsh.h>
 #include <epicsExport.h>
 #include <epicsExit.h>
@@ -45,7 +46,7 @@ static int PvApiInitialized;
 /** Driver for Prosilica GigE and CameraLink cameras using their PvApi library */
 class prosilica : public ADDriver {
 public:
-    prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory,
+    prosilica(const char *portName, const char *cameraId, int maxBuffers, size_t maxMemory,
               int priority, int stackSize);
                  
     /* These are the methods that we override from ADDriver */
@@ -96,7 +97,8 @@ private:
     asynStatus connectCamera();
     
     /* These items are specific to the Prosilica driver */
-    tPvHandle PvHandle;                /* GenericPointer for the Prosilica PvAPI library */
+    tPvHandle PvHandle;            /* GenericPointer for the Prosilica PvAPI library */
+    char *cameraId;                /* This can be a uniqueID, IP name, or IP address */
     unsigned long uniqueId;
     tPvCameraInfoEx PvCameraInfo;
     tPvFrame *PvFrames;
@@ -795,17 +797,45 @@ asynStatus prosilica::connectCamera()
     int ndims, dims[2];
     int bytesPerPixel;
     NDArray *pImage;
+    struct in_addr ipAddr;
+    bool isUniqueId;
     static const char *functionName = "connectCamera";
 
     /* First disconnect from the camera */
     disconnectCamera();
     
-    status = PvCameraInfoEx(this->uniqueId, &this->PvCameraInfo, sizeof(this->PvCameraInfo));
-    if (status) {
-        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: Cannot find camera %d\n", 
-              driverName, functionName, this->uniqueId);
-        return asynError;
+    /* Determine if we have been passed a uniqueID (all characters in cameraId are digits), or an IP address (anything else) */
+    isUniqueId = true;
+    for (i=0; i<(int)strlen(this->cameraId); i++) {
+      if (!isdigit(this->cameraId[i])) isUniqueId = false;
+    }
+    
+    if (isUniqueId) {
+        this->uniqueId = atoi(this->cameraId);
+        status = PvCameraInfoEx(this->uniqueId, &this->PvCameraInfo, sizeof(this->PvCameraInfo));
+        if (status) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+                  "%s:%s: Cannot find camera %d\n", 
+                  driverName, functionName, this->uniqueId);
+            return asynError;
+        }
+    } else {
+        /* We have been given an IP address or IP name */
+        status = hostToIPAddr(this->cameraId, &ipAddr);
+        if (status) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+                  "%s:%s: Cannot find IP address %s\n", 
+                  driverName, functionName, this->cameraId);
+            return asynError;
+        }
+        status = PvCameraInfoByAddrEx(ipAddr.s_addr, &this->PvCameraInfo, NULL, sizeof(this->PvCameraInfo));
+        if (status) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+                  "%s:%s: Cannot find camera %s\n", 
+                  driverName, functionName, this->cameraId);
+            return asynError;
+        }
+        this->uniqueId = this->PvCameraInfo.UniqueId;
     }
 
     if ((this->PvCameraInfo.PermittedAccess & ePvAccessMaster) == 0) {
@@ -815,7 +845,11 @@ asynStatus prosilica::connectCamera()
         return asynError;
     }
 
-    status = PvCameraOpen(this->uniqueId, ePvAccessMaster, &this->PvHandle);
+    if (isUniqueId)
+      status = PvCameraOpen(this->uniqueId, ePvAccessMaster, &this->PvHandle);
+    else
+      status = PvCameraOpenByAddr(ipAddr.s_addr, ePvAccessMaster, &this->PvHandle);
+    
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
               "%s:%s: unable to open camera %d\n",
@@ -1151,11 +1185,11 @@ void prosilica::report(FILE *fp, int details)
 
 
 extern "C" int prosilicaConfig(char *portName, /* Port name */
-                               int uniqueId,   /* Unique ID # of this camera. */
+                               const char *cameraId,   /* Unique ID #, or IP address or IP name of this camera. */
                                int maxBuffers, size_t maxMemory,
                                int priority, int stackSize)
 {
-    new prosilica(portName, uniqueId, maxBuffers, maxMemory, priority, stackSize);
+    new prosilica(portName, cameraId, maxBuffers, maxMemory, priority, stackSize);
     return(asynSuccess);
 }   
 
@@ -1172,18 +1206,20 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
   * \param[in] priority The thread priority for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
   * \param[in] stackSize The stack size for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
   */
-prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t maxMemory,
+prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers, size_t maxMemory,
                      int priority, int stackSize)
     : ADDriver(portName, 1, NUM_PS_PARAMS, maxBuffers, maxMemory, 
                0, 0,               /* No interfaces beyond those set in ADDriver.cpp */
                ASYN_CANBLOCK, 1,   /* ASYN_CANBLOCK=1, ASYN_MULTIDEVICE=0, autoConnect=1 */
                priority, stackSize), 
-      PvHandle(NULL), uniqueId(uniqueId), framesRemaining(0)
+      PvHandle(NULL), framesRemaining(0)
 
 {
     int status = asynSuccess;
     static const char *functionName = "prosilica";
 
+    this->cameraId = epicsStrDup(cameraId);
+    
     createParam(PSReadStatisticsString,    asynParamInt32, &PSReadStatistics);
     createParam(PSDriverTypeString,        asynParamOctet,   &PSDriverType);
     createParam(PSFilterVersionString,     asynParamOctet,   &PSFilterVersion);
@@ -1226,8 +1262,8 @@ prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t 
     if (!PvApiInitialized) {
         status = PvInitialize();
         if (status) {
-            printf("%s:%s: ERROR: PvInitialize failed for camera %d, status=%d\n", 
-            driverName, functionName, uniqueId, status);
+            printf("%s:%s: ERROR: PvInitialize failed, status=%d\n", 
+            driverName, functionName, status);
             return;
         }
         PvApiInitialized = 1;
@@ -1241,8 +1277,8 @@ prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t 
      * someone else.  It may connect later. */
     status = connectCamera();
     if (status) {
-        printf("%s:%s: cannot connect to camera %d, manually connect when available.\n", 
-               driverName, functionName, uniqueId);
+        printf("%s:%s: cannot connect to camera %s, manually connect when available.\n", 
+               driverName, functionName, cameraId);
         return;
     }
     
@@ -1252,8 +1288,8 @@ prosilica::prosilica(const char *portName, int uniqueId, int maxBuffers, size_t 
 }
 
 /* Code for iocsh registration */
-static const iocshArg prosilicaConfigArg0  = {"Port name", iocshArgString};
-static const iocshArg prosilicaConfigArg1 = {"Unique Id", iocshArgInt};
+static const iocshArg prosilicaConfigArg0 = {"Port name", iocshArgString};
+static const iocshArg prosilicaConfigArg1 = {"Camera Id (unique ID, IP address, or IP name", iocshArgString};
 static const iocshArg prosilicaConfigArg2 = {"maxBuffers", iocshArgInt};
 static const iocshArg prosilicaConfigArg3 = {"maxMemory", iocshArgInt};
 static const iocshArg prosilicaConfigArg4 = {"priority", iocshArgInt};
@@ -1267,7 +1303,7 @@ static const iocshArg * const prosilicaConfigArgs[] = {&prosilicaConfigArg0,
 static const iocshFuncDef configprosilica = {"prosilicaConfig", 6, prosilicaConfigArgs};
 static void configprosilicaCallFunc(const iocshArgBuf *args)
 {
-    prosilicaConfig(args[0].sval, args[1].ival, args[2].ival, 
+    prosilicaConfig(args[0].sval, args[1].sval, args[2].ival, 
                     args[3].ival, args[4].ival, args[5].ival);
 }
 
