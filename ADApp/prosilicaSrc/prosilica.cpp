@@ -441,6 +441,7 @@ asynStatus prosilica::setPixelFormat()
 asynStatus prosilica::setGeometry()
 {
     int status = asynSuccess;
+    int s;
     int binX, binY, minY, minX, sizeX, sizeY;
     static const char *functionName = "setGeometry";
     
@@ -454,8 +455,11 @@ asynStatus prosilica::setGeometry()
     status |= getIntegerParam(ADSizeX, &sizeX);
     status |= getIntegerParam(ADSizeY, &sizeY);
     
-    status |= PvAttrUint32Set(this->PvHandle, "BinningX", binX);
-    status |= PvAttrUint32Set(this->PvHandle, "BinningY", binY);
+    /* CMOS cameras don't support binning, so ignore ePvErrNotFound errors */
+    s = PvAttrUint32Set(this->PvHandle, "BinningX", binX);
+    if (s != ePvErrNotFound) status |= s;
+    s = PvAttrUint32Set(this->PvHandle, "BinningY", binY);
+    if (s != ePvErrNotFound) status |= s;
     status |= PvAttrUint32Set(this->PvHandle, "RegionX", minX/binX);
     status |= PvAttrUint32Set(this->PvHandle, "RegionY", minY/binY);
     status |= PvAttrUint32Set(this->PvHandle, "Width",   sizeX/binX);
