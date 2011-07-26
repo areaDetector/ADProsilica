@@ -420,6 +420,12 @@ typedef unsigned long   tPvUint32;  // 32-bit unsigned integer
 typedef float           tPvFloat32; // IEEE 32-bit float
 typedef long long       tPvInt64;   // 64-bit signed integer
 typedef unsigned char   tPvBoolean; // boolean
+#elif defined(__LP64__)
+typedef int             tPvInt32;   // 32-bit signed integer
+typedef unsigned int    tPvUint32;  // 32-bit unsigned integer
+typedef float           tPvFloat32; // IEEE 32-bit float
+typedef long            tPvInt64;   // 64-bit signed integer
+typedef unsigned char   tPvBoolean; // boolean
 #else
 #error Define specific data types for your platform.
 #endif
