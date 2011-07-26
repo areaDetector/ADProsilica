@@ -15,6 +15,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 #ifdef linux
 #include <readline/readline.h>
