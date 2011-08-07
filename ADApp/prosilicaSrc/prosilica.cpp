@@ -41,14 +41,14 @@ static const char *driverName = "prosilica";
 
 static int PvApiInitialized;
 
-#define MAX_FRAMES  2  /**< Number of frame buffers for PvApi */
+#define MAX_PVAPI_FRAMES  2  /**< Number of frame buffers for PvApi */
 #define MAX_PACKET_SIZE 8228
                                       
 /** Driver for Prosilica GigE and CameraLink cameras using their PvApi library */
 class prosilica : public ADDriver {
 public:
     prosilica(const char *portName, const char *cameraId, int maxBuffers, size_t maxMemory,
-              int priority, int stackSize);
+              int priority, int stackSize, int maxPvAPIFrames);
                  
     /* These are the methods that we override from ADDriver */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
@@ -63,6 +63,7 @@ protected:
     int PSDriverType;
     int PSFilterVersion;
     int PSFrameRate;
+    int PSByteRate;
     int PSFramesCompleted;
     int PSFramesDropped;
     int PSPacketsErroneous;
@@ -104,6 +105,7 @@ private:
     tPvCameraInfoEx PvCameraInfo;
     tPvFrame *PvFrames;
     size_t maxFrameSize;
+    int maxPvAPIFrames_;
     int framesRemaining;
     char sensorType[20];
     char IPAddress[50];
@@ -180,6 +182,7 @@ static const char *PSStrobeModes[] = {
 #define PSDriverTypeString           "PS_DRIVER_TYPE"          /* (asynOctet,    r/o) Ethernet driver type */ 
 #define PSFilterVersionString        "PS_FILTER_VERSION"       /* (asynOctet,    r/o) Ethernet packet filter version */ 
 #define PSFrameRateString            "PS_FRAME_RATE"           /* (asynFloat64,  r/o) Frame rate */ 
+#define PSByteRateString             "PS_BYTE_RATE"            /* (asynInt32,    r/w) Stream bytes per second */ 
 #define PSFramesCompletedString      "PS_FRAMES_COMPLETED"     /* (asynInt32,    r/o) Frames completed */ 
 #define PSFramesDroppedString        "PS_FRAMES_DROPPED"       /* (asynInt32,    r/o) Frames dropped */ 
 #define PSPacketsErroneousString     "PS_PACKETS_ERRONEOUS"    /* (asynInt32,    r/o) Erroneous packets */ 
@@ -528,36 +531,38 @@ asynStatus prosilica::readStats()
         status = 0;
         strcpy(buffer, "Unsupported parameter");
     }
-    status |= setStringParam ( PSDriverType, buffer);    
+    status |= setStringParam (PSDriverType, buffer);    
     status |= PvAttrStringGet    (this->PvHandle, "StatFilterVersion", buffer, sizeof(buffer), &nchars);
     if (status == ePvErrNotFound) {
         status = 0;
         strcpy(buffer, "Unsupported parameter");
     }
-    status |= setStringParam ( PSFilterVersion, buffer);
+    status |= setStringParam (PSFilterVersion, buffer);
     status |= PvAttrFloat32Get   (this->PvHandle, "StatFrameRate", &fval);
-    status |= setDoubleParam ( PSFrameRate, fval);
+    status |= PvAttrUint32Get    (this->PvHandle, "StreamBytesPerSecond", &uval);
+    status |= setIntegerParam(PSByteRate, (int)uval);
+    status |= setDoubleParam (PSFrameRate, fval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatFramesCompleted", &uval);
-    status |= setIntegerParam( PSFramesCompleted, (int)uval);
+    status |= setIntegerParam(PSFramesCompleted, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatFramesDropped", &uval);
-    status |= setIntegerParam( PSFramesDropped, (int)uval);
+    status |= setIntegerParam(PSFramesDropped, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsErroneous", &uval);
-    status |= setIntegerParam( PSPacketsErroneous, (int)uval);
+    status |= setIntegerParam(PSPacketsErroneous, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsMissed", &uval);
-    status |= setIntegerParam( PSPacketsMissed, (int)uval);
+    status |= setIntegerParam(PSPacketsMissed, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsReceived", &uval);
-    status |= setIntegerParam( PSPacketsReceived, (int)uval);
+    status |= setIntegerParam(PSPacketsReceived, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsRequested", &uval);
-    status |= setIntegerParam( PSPacketsRequested, (int)uval);
+    status |= setIntegerParam(PSPacketsRequested, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatPacketsResent", &uval);
-    status |= setIntegerParam( PSPacketsResent, (int)uval);
+    status |= setIntegerParam(PSPacketsResent, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "SyncInLevels", &uval);
-    status |= setIntegerParam( PSSyncIn1Level, uval&0x01 ? 1:0);
-    status |= setIntegerParam( PSSyncIn2Level, uval&0x02 ? 1:0);
+    status |= setIntegerParam(PSSyncIn1Level, uval&0x01 ? 1:0);
+    status |= setIntegerParam(PSSyncIn2Level, uval&0x02 ? 1:0);
     status |= PvAttrUint32Get    (this->PvHandle, "SyncOutGpoLevels", &uval);
-    status |= setIntegerParam( PSSyncOut1Level, uval&0x01 ? 1:0);
-    status |= setIntegerParam( PSSyncOut2Level, uval&0x02 ? 1:0);
-    status |= setIntegerParam( PSSyncOut3Level, uval&0x04 ? 1:0);
+    status |= setIntegerParam(PSSyncOut1Level, uval&0x01 ? 1:0);
+    status |= setIntegerParam(PSSyncOut2Level, uval&0x02 ? 1:0);
+    status |= setIntegerParam(PSSyncOut3Level, uval&0x04 ? 1:0);
     status |= PvAttrEnumGet(this->PvHandle, "SyncOut1Mode", buffer, sizeof(buffer), &nchars);
     for (i=0; i<NUM_SYNC_OUT_MODES; i++) {
         if (strcmp(buffer, PSSyncOutModes[i]) == 0) {
@@ -605,7 +610,7 @@ asynStatus prosilica::readStats()
         i=0;
         status |= asynError;
     }
-    status |= setIntegerParam( PSSyncOut1Invert, i);
+    status |= setIntegerParam(PSSyncOut1Invert, i);
     status |= PvAttrEnumGet(this->PvHandle, "SyncOut2Invert", buffer, sizeof(buffer), &nchars);
     if (strcmp(buffer, "Off") == 0) i = 0;
     else if (strcmp(buffer, "On") == 0) i = 1;
@@ -613,7 +618,7 @@ asynStatus prosilica::readStats()
         i=0;
         status |= asynError;
     }
-    status |= setIntegerParam( PSSyncOut2Invert, i);
+    status |= setIntegerParam(PSSyncOut2Invert, i);
     status |= PvAttrEnumGet(this->PvHandle, "SyncOut3Invert", buffer, sizeof(buffer), &nchars);
     if (status == ePvErrNotFound) {
         status = 0;
@@ -626,7 +631,7 @@ asynStatus prosilica::readStats()
             status |= asynError;
         }
     }
-    status |= setIntegerParam( PSSyncOut3Invert, i);
+    status |= setIntegerParam(PSSyncOut3Invert, i);
 
     status |= PvAttrEnumGet(this->PvHandle, "Strobe1Mode", buffer, sizeof(buffer), &nchars);
     for (i=0; i<NUM_STROBE_MODES; i++) {
@@ -646,12 +651,12 @@ asynStatus prosilica::readStats()
         i=0;
         status |= asynError;
     }
-    status |= setIntegerParam( PSStrobe1CtlDuration, i);
+    status |= setIntegerParam(PSStrobe1CtlDuration, i);
 
     status |= PvAttrUint32Get    (this->PvHandle, "Strobe1Delay", &uval);
-    status |= setDoubleParam( PSStrobe1Delay, uval/1.e6);
+    status |= setDoubleParam(PSStrobe1Delay, uval/1.e6);
     status |= PvAttrUint32Get    (this->PvHandle, "Strobe1Duration", &uval);
-    status |= setDoubleParam( PSStrobe1Duration, uval/1.e6);
+    status |= setDoubleParam(PSStrobe1Duration, uval/1.e6);
 
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
@@ -904,7 +909,7 @@ asynStatus prosilica::connectCamera()
     /* If the camera supports color then there can be 3 values per pixel */
     if (strcmp(this->sensorType, "Mono") != 0) bytesPerPixel *= 3;
     this->maxFrameSize = this->sensorWidth * this->sensorHeight * bytesPerPixel;    
-    for (i=0; i<MAX_FRAMES; i++) {
+    for (i=0; i<maxPvAPIFrames_; i++) {
         pFrame = &this->PvFrames[i];
         ndims = 2;
         dims[0] = this->sensorWidth;
@@ -1040,6 +1045,8 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
             status |= PvAttrEnumSet(this->PvHandle, "FrameStartTriggerMode", 
                                     PSTriggerStartModes[value]);
         }
+    } else if (function == PSByteRate) {
+            status |= PvAttrUint32Set(this->PvHandle, "StreamBytesPerSecond", value);
     } else if (function == PSReadStatistics) {
             readStats();
     } else if (function == PSSyncOut1Mode) {
@@ -1175,6 +1182,7 @@ void prosilica::report(FILE *fp, int details)
         fprintf(fp, "  Sensor height:     %d\n",  (int)this->sensorHeight);
         fprintf(fp, "  Frame buffer size: %d\n",  (int)this->PvFrames[0].ImageBufferSize);
         fprintf(fp, "  Time stamp freq:   %d\n",  (int)this->timeStampFrequency);
+        fprintf(fp, "  maxPvAPIFrames:    %d\n",  (int)this->maxPvAPIFrames_);
         fprintf(fp, "\n");
         fprintf(fp, "List of all Prosilica cameras found (total=%d):\n", (int)numReturned);
         for (i=0; i<(int)numReturned; i++) {
@@ -1197,9 +1205,9 @@ void prosilica::report(FILE *fp, int details)
 extern "C" int prosilicaConfig(char *portName, /* Port name */
                                const char *cameraId,   /* Unique ID #, or IP address or IP name of this camera. */
                                int maxBuffers, size_t maxMemory,
-                               int priority, int stackSize)
+                               int priority, int stackSize, int maxPvAPIFrames)
 {
-    new prosilica(portName, cameraId, maxBuffers, maxMemory, priority, stackSize);
+    new prosilica(portName, cameraId, maxBuffers, maxMemory, priority, stackSize, maxPvAPIFrames);
     return(asynSuccess);
 }   
 
@@ -1217,12 +1225,12 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
   * \param[in] stackSize The stack size for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
   */
 prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers, size_t maxMemory,
-                     int priority, int stackSize)
+                     int priority, int stackSize, int maxPvAPIFrames)
     : ADDriver(portName, 1, NUM_PS_PARAMS, maxBuffers, maxMemory, 
                0, 0,               /* No interfaces beyond those set in ADDriver.cpp */
                ASYN_CANBLOCK, 1,   /* ASYN_CANBLOCK=1, ASYN_MULTIDEVICE=0, autoConnect=1 */
                priority, stackSize), 
-      PvHandle(NULL), framesRemaining(0)
+      PvHandle(NULL), maxPvAPIFrames_(maxPvAPIFrames), framesRemaining(0) 
 
 {
     int status = asynSuccess;
@@ -1234,6 +1242,7 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     createParam(PSDriverTypeString,        asynParamOctet,   &PSDriverType);
     createParam(PSFilterVersionString,     asynParamOctet,   &PSFilterVersion);
     createParam(PSFrameRateString,         asynParamFloat64, &PSFrameRate);
+    createParam(PSByteRateString,          asynParamInt32, &PSByteRate);
     createParam(PSFramesCompletedString,   asynParamInt32, &PSFramesCompleted);
     createParam(PSFramesDroppedString,     asynParamInt32, &PSFramesDropped);
     createParam(PSPacketsErroneousString,  asynParamInt32, &PSPacketsErroneous);
@@ -1263,8 +1272,10 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     rl_catch_signals = 0;
 #endif
 
+    /* Set default value of maxPvAPIFrames_ if it is zero */
+    if (maxPvAPIFrames_ == 0) maxPvAPIFrames_ = MAX_PVAPI_FRAMES;
     /* Create the PvFrames buffer.  Note that these structures must be set to 0! */
-    PvFrames = (tPvFrame *)calloc(MAX_FRAMES, sizeof(tPvFrame));
+    PvFrames = (tPvFrame *)calloc(maxPvAPIFrames_, sizeof(tPvFrame));
 
     /* Initialize the Prosilica PvAPI library 
      * We get an error if we call this twice, so we need a global flag to see if 
@@ -1304,17 +1315,19 @@ static const iocshArg prosilicaConfigArg2 = {"maxBuffers", iocshArgInt};
 static const iocshArg prosilicaConfigArg3 = {"maxMemory", iocshArgInt};
 static const iocshArg prosilicaConfigArg4 = {"priority", iocshArgInt};
 static const iocshArg prosilicaConfigArg5 = {"stackSize", iocshArgInt};
+static const iocshArg prosilicaConfigArg6 = {"maxPvAPIFrames", iocshArgInt};
 static const iocshArg * const prosilicaConfigArgs[] = {&prosilicaConfigArg0,
                                                        &prosilicaConfigArg1,
                                                        &prosilicaConfigArg2,
                                                        &prosilicaConfigArg3,
                                                        &prosilicaConfigArg4,
-                                                       &prosilicaConfigArg5};
-static const iocshFuncDef configprosilica = {"prosilicaConfig", 6, prosilicaConfigArgs};
+                                                       &prosilicaConfigArg5,
+                                                       &prosilicaConfigArg6};
+static const iocshFuncDef configprosilica = {"prosilicaConfig", 7, prosilicaConfigArgs};
 static void configprosilicaCallFunc(const iocshArgBuf *args)
 {
     prosilicaConfig(args[0].sval, args[1].sval, args[2].ival, 
-                    args[3].ival, args[4].ival, args[5].ival);
+                    args[3].ival, args[4].ival, args[5].ival, args[6].ival);
 }
 
 
