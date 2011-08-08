@@ -1223,6 +1223,7 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
   *            allowed to allocate. Set this to -1 to allow an unlimited amount of memory.
   * \param[in] priority The thread priority for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
   * \param[in] stackSize The stack size for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
+  * \param[in] maxPvAPIFrames The number of frame buffers to use in the PvAPI library driver. Default=MAX_PVAPI_FRAMES=2.
   */
 prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers, size_t maxMemory,
                      int priority, int stackSize, int maxPvAPIFrames)
