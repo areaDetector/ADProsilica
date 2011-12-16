@@ -72,6 +72,10 @@ protected:
     int PSPacketsRequested;
     int PSPacketsResent;
     int PSBadFrameCounter;
+    int PSTriggerDelay;
+    int PSTriggerEvent;
+    int PSTriggerOverlap;
+    int PSTriggerSoftware;
     int PSSyncIn1Level;
     int PSSyncIn2Level;
     int PSSyncOut1Mode;
@@ -138,7 +142,22 @@ static const char *PSTriggerStartModes[] = {
     "FixedRate",
     "Software"
 };
-#define NUM_START_TRIGGER_MODES (int)(sizeof(PSTriggerStartModes) / sizeof(PSTriggerStartModes[0]))
+#define NUM_TRIGGER_START_MODES (int)(sizeof(PSTriggerStartModes) / sizeof(PSTriggerStartModes[0]))
+
+static const char *PSTriggerEventModes[] = {
+    "EdgeRising",
+    "EdgeFalling",
+    "EdgeAny",
+    "LevelHigh",
+    "LevelLow"
+};
+#define NUM_TRIGGER_EVENT_MODES (int)(sizeof(PSTriggerEventModes) / sizeof(PSTriggerEventModes[0]))
+
+static const char *PSTriggerOverlapModes[] = {
+    "Off",
+    "PreviousFrame"
+};
+#define NUM_TRIGGER_OVERLAP_MODES (int)(sizeof(PSTriggerOverlapModes) / sizeof(PSTriggerOverlapModes[0]))
 
 static const char *PSSyncOutModes[] = {
     "GPO",
@@ -191,6 +210,10 @@ static const char *PSStrobeModes[] = {
 #define PSPacketsRequestedString     "PS_PACKETS_REQUESTED"    /* (asynInt32,    r/o) Packets requested */ 
 #define PSPacketsResentString        "PS_PACKETS_RESENT"       /* (asynInt32,    r/o) Packets resent */
 #define PSBadFrameCounterString      "PS_BAD_FRAME_COUNTER"    /* (asynInt32,    r/o) Bad frame counter */
+#define PSTriggerDelayString         "PS_TRIGGER_DELAY"        /* (asynFloat64,  r/w) Frame start trigger delay */
+#define PSTriggerEventString         "PS_TRIGGER_EVENT"        /* (asynInt32,    r/w) Frame start trigger event */
+#define PSTriggerOverlapString       "PS_TRIGGER_OVERLAP"      /* (asynInt32,    r/w) Frame start trigger overlap */
+#define PSTriggerSoftwareString      "PS_TRIGGER_SOFTWARE"     /* (asynInt32  ,  r/w) Frame start trigger software*/
 #define PSSyncIn1LevelString         "PS_SYNC_IN_1_LEVEL"      /* (asynInt32,    r/o) Sync input 1 level */
 #define PSSyncIn2LevelString         "PS_SYNC_IN_2_LEVEL"      /* (asynInt32,    r/o) Sync input 2 level */
 #define PSSyncOut1ModeString         "PS_SYNC_OUT_1_MODE"      /* (asynInt32,    r/w) Sync output 1 mode */
@@ -563,6 +586,36 @@ asynStatus prosilica::readStats()
     status |= setIntegerParam(PSSyncOut1Level, uval&0x01 ? 1:0);
     status |= setIntegerParam(PSSyncOut2Level, uval&0x02 ? 1:0);
     status |= setIntegerParam(PSSyncOut3Level, uval&0x04 ? 1:0);
+    status |= PvAttrUint32Get    (this->PvHandle, "FrameStartTriggerDelay", &uval);
+    status |= setDoubleParam(PSTriggerDelay, uval/1.e6);
+    status |= PvAttrEnumGet(this->PvHandle, "FrameStartTriggerEvent", buffer, sizeof(buffer), &nchars);
+    for (i=0; i<NUM_TRIGGER_EVENT_MODES; i++) {
+        if (strcmp(buffer, PSTriggerEventModes[i]) == 0) {
+            status |= setIntegerParam(PSTriggerEvent, i);
+            break;
+        }
+    }
+    if (i == NUM_TRIGGER_EVENT_MODES) {
+        status |= setIntegerParam(PSTriggerEvent, 0);
+        status |= asynError;
+    }    
+    status |= PvAttrEnumGet(this->PvHandle, "FrameStartTriggerOverlap", buffer, sizeof(buffer), &nchars);
+    /* This parameter can be not supported */
+    if (status == ePvErrNotFound) {
+        status = 0;
+        status |= setIntegerParam(PSTriggerOverlap, 0);
+    } else {
+        for (i=0; i<NUM_TRIGGER_OVERLAP_MODES; i++) {
+            if (strcmp(buffer, PSTriggerOverlapModes[i]) == 0) {
+                status |= setIntegerParam(PSTriggerOverlap, i);
+                break;
+            }
+        }
+        if (i == NUM_TRIGGER_OVERLAP_MODES) {
+            status |= setIntegerParam(PSTriggerOverlap, 0);
+            status |= asynError;
+        }
+    }
     status |= PvAttrEnumGet(this->PvHandle, "SyncOut1Mode", buffer, sizeof(buffer), &nchars);
     for (i=0; i<NUM_SYNC_OUT_MODES; i++) {
         if (strcmp(buffer, PSSyncOutModes[i]) == 0) {
@@ -597,10 +650,10 @@ asynStatus prosilica::readStats()
                 break;
             }
         }
-    }
-    if (i == NUM_SYNC_OUT_MODES) {
-        status |= setIntegerParam(PSSyncOut3Mode, 0);
-        status |= asynError;
+        if (i == NUM_SYNC_OUT_MODES) {
+            status |= setIntegerParam(PSSyncOut3Mode, 0);
+            status |= asynError;
+        }
     }
     
     status |= PvAttrEnumGet(this->PvHandle, "SyncOut1Invert", buffer, sizeof(buffer), &nchars);
@@ -727,13 +780,13 @@ asynStatus prosilica::readParameters()
     status |= setIntegerParam(ADImageMode, i);
 
     status |= PvAttrEnumGet(this->PvHandle, "FrameStartTriggerMode", buffer, sizeof(buffer), &nchars);
-    for (i=0; i<NUM_START_TRIGGER_MODES; i++) {
+    for (i=0; i<NUM_TRIGGER_START_MODES; i++) {
         if (strcmp(buffer, PSTriggerStartModes[i]) == 0) {
             status |= setIntegerParam(ADTriggerMode, i);
             break;
         }
     }
-    if (i == NUM_START_TRIGGER_MODES) {
+    if (i == NUM_TRIGGER_START_MODES) {
         status |= setIntegerParam(ADTriggerMode, 0);
         status |= asynError;
     }
@@ -1039,7 +1092,7 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
             status |= PvCommandRun(this->PvHandle, "AcquisitionAbort");
         }
     } else if (function == ADTriggerMode) {
-        if ((value < 0) || (value > (NUM_START_TRIGGER_MODES-1))) {
+        if ((value < 0) || (value > (NUM_TRIGGER_START_MODES-1))) {
             status = asynError;
         } else {
             status |= PvAttrEnumSet(this->PvHandle, "FrameStartTriggerMode", 
@@ -1049,6 +1102,12 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
             status |= PvAttrUint32Set(this->PvHandle, "StreamBytesPerSecond", value);
     } else if (function == PSReadStatistics) {
             readStats();
+    } else if (function == PSTriggerEvent) {
+            status |= PvAttrEnumSet(this->PvHandle, "FrameStartTriggerEvent", PSTriggerEventModes[value]);
+    } else if (function == PSTriggerOverlap) {
+            status |= PvAttrEnumSet(this->PvHandle, "FrameStartTriggerOverlap", PSTriggerOverlapModes[value]);
+    } else if (function == PSTriggerSoftware) {
+            status |= PvCommandRun(this->PvHandle, "FrameStartTriggerSoftware");
     } else if (function == PSSyncOut1Mode) {
             status |= PvAttrEnumSet(this->PvHandle, "SyncOut1Mode", PSSyncOutModes[value]);
     } else if (function == PSSyncOut2Mode) {
@@ -1127,6 +1186,9 @@ asynStatus prosilica::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     } else if (function == ADGain) {
         /* Prosilica uses an integer value */
         status |= PvAttrUint32Set(this->PvHandle, "GainValue", (tPvUint32)(value));
+    } else if (function == PSTriggerDelay) {
+        /* Prosilica uses integer microseconds */
+        status |= PvAttrUint32Set(this->PvHandle, "FrameStartTriggerDelay", (tPvUint32)(value*1e6));
     } else if (function == PSStrobe1Delay) {
         /* Prosilica uses integer microseconds */
         status |= PvAttrUint32Set(this->PvHandle, "Strobe1Delay", (tPvUint32)(value*1e6));
@@ -1239,34 +1301,38 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
 
     this->cameraId = epicsStrDup(cameraId);
     
-    createParam(PSReadStatisticsString,    asynParamInt32, &PSReadStatistics);
-    createParam(PSDriverTypeString,        asynParamOctet,   &PSDriverType);
-    createParam(PSFilterVersionString,     asynParamOctet,   &PSFilterVersion);
-    createParam(PSFrameRateString,         asynParamFloat64, &PSFrameRate);
-    createParam(PSByteRateString,          asynParamInt32, &PSByteRate);
-    createParam(PSFramesCompletedString,   asynParamInt32, &PSFramesCompleted);
-    createParam(PSFramesDroppedString,     asynParamInt32, &PSFramesDropped);
-    createParam(PSPacketsErroneousString,  asynParamInt32, &PSPacketsErroneous);
-    createParam(PSPacketsMissedString,     asynParamInt32, &PSPacketsMissed);
-    createParam(PSPacketsReceivedString,   asynParamInt32, &PSPacketsReceived);
-    createParam(PSPacketsRequestedString,  asynParamInt32, &PSPacketsRequested);
-    createParam(PSPacketsResentString,     asynParamInt32, &PSPacketsResent);
-    createParam(PSBadFrameCounterString,   asynParamInt32, &PSBadFrameCounter);
-    createParam(PSSyncIn1LevelString,      asynParamInt32, &PSSyncIn1Level);
-    createParam(PSSyncIn2LevelString,      asynParamInt32, &PSSyncIn2Level);
-    createParam(PSSyncOut1ModeString,      asynParamInt32, &PSSyncOut1Mode);
-    createParam(PSSyncOut1LevelString,     asynParamInt32, &PSSyncOut1Level);
-    createParam(PSSyncOut1InvertString,    asynParamInt32, &PSSyncOut1Invert);
-    createParam(PSSyncOut2ModeString,      asynParamInt32, &PSSyncOut2Mode);
-    createParam(PSSyncOut2LevelString,     asynParamInt32, &PSSyncOut2Level);
-    createParam(PSSyncOut2InvertString,    asynParamInt32, &PSSyncOut2Invert);
-    createParam(PSSyncOut3ModeString,      asynParamInt32, &PSSyncOut3Mode);
-    createParam(PSSyncOut3LevelString,     asynParamInt32, &PSSyncOut3Level);
-    createParam(PSSyncOut3InvertString,    asynParamInt32, &PSSyncOut3Invert);
-    createParam(PSStrobe1ModeString,       asynParamInt32, &PSStrobe1Mode);
-    createParam(PSStrobe1DelayString,      asynParamFloat64, &PSStrobe1Delay);
-    createParam(PSStrobe1CtlDurationString,asynParamInt32, &PSStrobe1CtlDuration);
-    createParam(PSStrobe1DurationString,   asynParamFloat64, &PSStrobe1Duration);
+    createParam(PSReadStatisticsString,    asynParamInt32,    &PSReadStatistics);
+    createParam(PSDriverTypeString,        asynParamOctet,    &PSDriverType);
+    createParam(PSFilterVersionString,     asynParamOctet,    &PSFilterVersion);
+    createParam(PSFrameRateString,         asynParamFloat64,  &PSFrameRate);
+    createParam(PSByteRateString,          asynParamInt32,    &PSByteRate);
+    createParam(PSFramesCompletedString,   asynParamInt32,    &PSFramesCompleted);
+    createParam(PSFramesDroppedString,     asynParamInt32,    &PSFramesDropped);
+    createParam(PSPacketsErroneousString,  asynParamInt32,    &PSPacketsErroneous);
+    createParam(PSPacketsMissedString,     asynParamInt32,    &PSPacketsMissed);
+    createParam(PSPacketsReceivedString,   asynParamInt32,    &PSPacketsReceived);
+    createParam(PSPacketsRequestedString,  asynParamInt32,    &PSPacketsRequested);
+    createParam(PSPacketsResentString,     asynParamInt32,    &PSPacketsResent);
+    createParam(PSBadFrameCounterString,   asynParamInt32,    &PSBadFrameCounter);
+    createParam(PSTriggerDelayString,      asynParamFloat64,  &PSTriggerDelay);
+    createParam(PSTriggerEventString,      asynParamInt32,    &PSTriggerEvent);
+    createParam(PSTriggerOverlapString,    asynParamInt32,    &PSTriggerOverlap);
+    createParam(PSTriggerSoftwareString,   asynParamInt32,    &PSTriggerSoftware);
+    createParam(PSSyncIn1LevelString,      asynParamInt32,    &PSSyncIn1Level);
+    createParam(PSSyncIn2LevelString,      asynParamInt32,    &PSSyncIn2Level);
+    createParam(PSSyncOut1ModeString,      asynParamInt32,    &PSSyncOut1Mode);
+    createParam(PSSyncOut1LevelString,     asynParamInt32,    &PSSyncOut1Level);
+    createParam(PSSyncOut1InvertString,    asynParamInt32,    &PSSyncOut1Invert);
+    createParam(PSSyncOut2ModeString,      asynParamInt32,    &PSSyncOut2Mode);
+    createParam(PSSyncOut2LevelString,     asynParamInt32,    &PSSyncOut2Level);
+    createParam(PSSyncOut2InvertString,    asynParamInt32,    &PSSyncOut2Invert);
+    createParam(PSSyncOut3ModeString,      asynParamInt32,    &PSSyncOut3Mode);
+    createParam(PSSyncOut3LevelString,     asynParamInt32,    &PSSyncOut3Level);
+    createParam(PSSyncOut3InvertString,    asynParamInt32,    &PSSyncOut3Invert);
+    createParam(PSStrobe1ModeString,       asynParamInt32,    &PSStrobe1Mode);
+    createParam(PSStrobe1DelayString,      asynParamFloat64,  &PSStrobe1Delay);
+    createParam(PSStrobe1CtlDurationString,asynParamInt32,    &PSStrobe1CtlDuration);
+    createParam(PSStrobe1DurationString,   asynParamFloat64,  &PSStrobe1Duration);
 
     /* There is a conflict with readline use of signals, don't use readline signal handlers */
 #ifdef linux
