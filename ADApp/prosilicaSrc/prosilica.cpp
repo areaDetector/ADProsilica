@@ -109,7 +109,7 @@ private:
     unsigned long uniqueId;
     tPvCameraInfoEx PvCameraInfo;
     tPvFrame *PvFrames;
-    size_t maxFrameSize;
+    int maxFrameSize;
     int maxPvAPIFrames_;
     int framesRemaining;
     char sensorType[20];
@@ -203,7 +203,7 @@ static const char *PSStrobeModes[] = {
 #define PSFilterVersionString        "PS_FILTER_VERSION"       /* (asynOctet,    r/o) Ethernet packet filter version */ 
 #define PSFrameRateString            "PS_FRAME_RATE"           /* (asynFloat64,  r/o) Frame rate */ 
 #define PSByteRateString             "PS_BYTE_RATE"            /* (asynInt32,    r/w) Stream bytes per second */ 
-#define PSPacketSizeString           "PS_PACKET_SIZE"          /* (asynInt32,    r/w) Packet size */ 
+#define PSPacketSizeString           "PS_PACKET_SIZE"          /* (asynInt32,    r/o) Packet size */ 
 #define PSFramesCompletedString      "PS_FRAMES_COMPLETED"     /* (asynInt32,    r/o) Frames completed */ 
 #define PSFramesDroppedString        "PS_FRAMES_DROPPED"       /* (asynInt32,    r/o) Frames dropped */ 
 #define PSPacketsErroneousString     "PS_PACKETS_ERRONEOUS"    /* (asynInt32,    r/o) Erroneous packets */ 
@@ -1104,8 +1104,6 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
     } else if (function == PSByteRate) {
             status |= PvAttrUint32Set(this->PvHandle, "StreamBytesPerSecond", value);
-    } else if (function == PSPacketSize) {
-            status |= PvAttrUint32Set(this->PvHandle, "PacketSize", value);
     } else if (function == PSReadStatistics) {
             readStats();
     } else if (function == PSTriggerEvent) {
