@@ -1,9 +1,9 @@
 /*
 |==============================================================================
-| Copyright (C) 2006-2010 Prosilica.  All Rights Reserved.
+| Copyright (C) 2006-2011 Allied Vision Technologies.  All Rights Reserved.
 |
 | Redistribution of this header file, in original or modified form, without
-| prior written consent of Prosilica is prohibited.
+| prior written consent of Allied Vision Technologies is prohibited.
 |
 |=============================================================================
 |
@@ -11,16 +11,15 @@
 |
 | Project/lib:  PvAPI
 |
-| Target:       Win32, Linux, QNX
+| Targets:      Win32, Linux, QNX, OSX
 |
 | Description:  Main header file for PvAPI, the programming interface for
-|               Prosilica's GigE and Firewire cameras.
+|               Prosilica Series and Manta cameras.
 |
-| Notes:        GigE support is available now; firewire support to follow.
 |
 |------------------------------------------------------------------------------
 |
-| Here are the basic functions:
+| Example basic functions:
 |
 |       PvInitialize()          - load and initialize the PvApi module
 |       PvUnInitialize()        - shut down the module
@@ -40,23 +39,15 @@
 |       PvAttrList()            - list all attributes for this camera
 |       PvAttrInfo()            - get information on an attribute
 |
-| Camera attributes are used to represent controls such as acquisition mode or
-| shutter exposure time.  Camera attributes are also used to represent constant
-| values like serial numbers, or read-only values like bytes-per-frame.
+| Example basic attributes:
 |
-| A few basic attribute datatypes are supported, such as 32-bit unsigned,
-| enumerated set, and float.
+|       Width              - Uint32 - RW : image width in pixels
+|       Height             - Uint32 - RW : image height in pixels
+|       PixelFormat        - Enum   - RW : image data format. Eg. mono8, mono16
+|       TotalBytesPerFrame - Uint32 - R  : number of bytes per image
+|       ExposureValue      - Uint32 - RW : camera exposure time
 |
-| Here are the basic attributes common to all cameras:
-|
-|       AcquisitionMode         - idle, or continuous acquisition
-|       Width                   - image width in pixels
-|       Height                  - image height in pixels
-|       PixelFormat             - image data format (ex. mono8, mono16)
-|       TotalBytesPerFrame      - number of bytes per image
-|
-| Most attributes are specific to each camera model and revision, and are
-| documented elsewhere.
+| See AVT "GigE Camera and Driver Attributes" document for full attribute description
 |
 |==============================================================================
 |
@@ -81,6 +72,7 @@
 | 17/Aug/07     Added new pixel formats
 | 26/Feb/09     Release 1.22
 | 05/Apr/10     Added support for int64 and boolean attributes
+| 03/May/11     Added FrameCount, AncillaryBuffer notes
 |==============================================================================
 */
 
@@ -99,7 +91,7 @@ extern "C" {
         #ifdef _MSC_VER
                 #define PVDECL           __stdcall
         #else
-                #if defined(_LINUX) || defined(_QNX) || defined(_OSX) || defined(__APPLE__)
+                #if defined(_LINUX) || defined(_QNX) || defined(_OSX)
                         #define PVDECL
                 #else
                         #error Define PVDECL to be your compiler keyword for "standard call"
@@ -180,14 +172,14 @@ typedef enum
 //
 typedef struct
 {
-    unsigned long		StructVer;	         // Version of this structure
+    unsigned long       StructVer;	         // Version of this structure
     //---- Version 1 ----
     unsigned long       UniqueId;            // Unique value for each camera
     char                CameraName[32];      // People-friendly camera name (usually part name)
-    char	            ModelName[32];       // Name of camera part
+    char                ModelName[32];       // Name of camera part
     char                PartNumber[32];      // Manufacturer's part number
     char                SerialNumber[32];    // Camera's serial number
-    char				FirmwareVersion[32]; // Camera's firmware version
+    char                FirmwareVersion[32]; // Camera's firmware version
     unsigned long       PermittedAccess;     // A combination of tPvAccessFlags
     unsigned long       InterfaceId;         // Unique value for each interface or bus
     tPvInterface        InterfaceType;       // Interface type; see tPvInterface
@@ -258,8 +250,8 @@ typedef struct
 //
 typedef enum
 {
-    ePvLinkAdd          = 1, // A camera was plugged in
-    ePvLinkRemove       = 2, // A camera was unplugged
+    ePvLinkAdd          = 1, // camera first detected after PvInitialize 
+    ePvLinkRemove       = 2, // camera removed
     _ePvLink_reserved1  = 3, 
     __ePvLink_force_32  = 0xFFFFFFFF
 
@@ -355,20 +347,35 @@ typedef enum
 
 //
 // The frame structure passed to PvQueueFrame().
+// NOTE: Memset structure to 0 when allocated. 
+//       Prosilica filter driver reads AncillaryBuffer pointer.  
+//       If pointer location random/invalid this will cause issues. 
 //
 typedef struct
 {
     //----- In -----
-    void*               ImageBuffer;        // Your image buffer
-    unsigned long       ImageBufferSize;    // Size of your image buffer in bytes
+    void*               ImageBuffer;        // Buffer for image/pixel data.
+    unsigned long       ImageBufferSize;    // Size of ImageBuffer in bytes
 
-    void*               AncillaryBuffer;    // Your buffer to capture associated 
-                                            //   header & trailer data for this image.
-    unsigned long       AncillaryBufferSize;// Size of your ancillary buffer in bytes
-                                            //   (can be 0 for no buffer).
+    void*               AncillaryBuffer;    // Camera Firmware >= 1.42 Only.
+                                            // Buffer to capture ancillary chunk mode data. See ChunkModeActive attr.
+                                            // This MUST be 0 if not in use.
+                                            // Chunk mode format:
+                                            //     [Bytes 1 - 4]   acquisition count.
+                                            //     [Bytes 5 - 8]   user value. Not currently implemented. 0.
+                                            //	   [Bytes 9 - 12]  exposure value.
+                                            //	   [Bytes 13 - 16] gain value.
+                                            //	   [Bytes 17 - 18] sync in levels.
+                                            //	   [Bytes 19 - 20] sync out levels.
+                                            //	   [Bytes 21 - 40] not implemented. 0.
+                                            //	   [Bytes 41 - 44] chunk ID. 1000.
+                                            //	   [Bytes 45 - 48] chunk length.
 
-    void*               Context[4];         // For your use (valuable for your
-                                            //   frame-done callback).
+    unsigned long       AncillaryBufferSize;// Size of your ancillary buffer in bytes. See NonImagePayloadSize attr.
+                                            //   Set to 0 for no buffer.
+
+    void*               Context[4];         // For your use. Possible application: unique ID
+                                            //   of tPvFrame for frame-done callback.
     unsigned long       _reserved1[8];
 
     //----- Out -----
@@ -386,7 +393,7 @@ typedef struct
     unsigned long       BitDepth;           // Number of significant bits
     tPvBayerPattern     BayerPattern;       // Bayer pattern, if bayer format
 
-    unsigned long       FrameCount;         // Rolling frame counter
+    unsigned long       FrameCount;         // Frame counter. Uses 16bit GigEVision BlockID. Rolls at 65535.
     unsigned long       TimestampLo;        // Time stamp, lower 32-bits
     unsigned long       TimestampHi;        // Time stamp, upper 32-bits
 
@@ -408,7 +415,7 @@ typedef void (PVDECL *tPvFrameCallback)(tPvFrame* Frame);
 //----- Attributes ------------------------------------------------------------
 
 
-#if defined(_M_IX86) || defined(_x86) || defined(_WIN64) || defined(_x64) || defined(__i386__)
+#if defined(_M_IX86) || defined(_x86) || defined(_WIN64) || defined(_x64)
 typedef long            tPvInt32;   // 32-bit signed integer
 typedef unsigned long   tPvUint32;  // 32-bit unsigned integer
 typedef float           tPvFloat32; // IEEE 32-bit float
@@ -419,12 +426,6 @@ typedef long            tPvInt32;   // 32-bit integer
 typedef unsigned long   tPvUint32;  // 32-bit unsigned integer
 typedef float           tPvFloat32; // IEEE 32-bit float
 typedef long long       tPvInt64;   // 64-bit signed integer
-typedef unsigned char   tPvBoolean; // boolean
-#elif defined(__LP64__)
-typedef int             tPvInt32;   // 32-bit signed integer
-typedef unsigned int    tPvUint32;  // 32-bit unsigned integer
-typedef float           tPvFloat32; // IEEE 32-bit float
-typedef long            tPvInt64;   // 64-bit signed integer
 typedef unsigned char   tPvBoolean; // boolean
 #else
 #error Define specific data types for your platform.
