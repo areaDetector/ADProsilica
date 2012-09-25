@@ -1237,7 +1237,7 @@ void prosilica::report(FILE *fp, int details)
 {
     tPvCameraInfoEx cameraInfo[20], *pInfo; 
     int i;
-    unsigned long numReturned, numTotal;
+    unsigned long numReturned, numTotal, versionMajor, versionMinor;
     
     numReturned = PvCameraListEx(cameraInfo, 20, &numTotal, sizeof(tPvCameraInfoEx));
 
@@ -1245,6 +1245,8 @@ void prosilica::report(FILE *fp, int details)
             this->portName, (int)this->uniqueId);
     pInfo = &this->PvCameraInfo;
     if (details > 0) {
+        PvVersion(&versionMajor, &versionMinor);
+        fprintf(fp, "  PvAPI version:     %ld.%ld\n", versionMajor, versionMinor);
         fprintf(fp, "  ID:                %lu\n", pInfo->UniqueId);
         fprintf(fp, "  IP address:        %s\n",  this->IPAddress);
         fprintf(fp, "  Serial number:     %s\n",  pInfo->SerialNumber);
