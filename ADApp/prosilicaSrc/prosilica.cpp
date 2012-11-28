@@ -120,7 +120,7 @@ private:
     tPvUint32 timeStampFrequency;
 };
 
-#define NUM_PS_PARAMS (&LAST_PS_PARAM - &FIRST_PS_PARAM + 1)
+#define NUM_PS_PARAMS ((int)(&LAST_PS_PARAM - &FIRST_PS_PARAM + 1))
 typedef enum {
     /* These parameters describe the trigger modes of the Prosilica
      * They must agree with the values in the mbbo/mbbi records in
@@ -258,8 +258,8 @@ static void PVDECL frameCallbackC(tPvFrame *pFrame)
 /** This function gets called in a thread from the PvApi library when a new frame arrives */
 void prosilica::frameCallback(tPvFrame *pFrame)
 {
-    int status = asynSuccess;
-    int ndims, dims[2];
+    int ndims;
+    size_t dims[2];
     int imageCounter;
     int arrayCallbacks;
     NDArray *pImage;
@@ -437,7 +437,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     callParamCallbacks();
     
     /* Queue this frame to run again */
-    status = PvCaptureQueueFrame(this->PvHandle, pFrame, frameCallbackC); 
+    PvCaptureQueueFrame(this->PvHandle, pFrame, frameCallbackC); 
     this->unlock();
 }
 
@@ -871,7 +871,8 @@ asynStatus prosilica::connectCamera()
     unsigned long nchars;
     tPvFrame *pFrame;
     int i;
-    int ndims, dims[2];
+    int ndims;
+    size_t dims[2];
     int bytesPerPixel;
     NDArray *pImage;
     struct in_addr ipAddr;
