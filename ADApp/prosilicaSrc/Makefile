@@ -5,10 +5,14 @@ include $(TOP)/configure/CONFIG
 #=============================
 
 USR_CXXFLAGS_Linux += -D_LINUX -D_x86
+USR_CXXFLAGS_Darwin += -D_OSX -D_x86
 
 # The following is needed on win32-x86-debug because the Prosilica library 
 # wants to use LIBCMT, and that conflicts with LIBCMTD
 ifeq ($(T_A), win32-x86-debug)
+USR_LDFLAGS += /NODEFAULTLIB:LIBCMT
+endif
+ifeq ($(T_A), windows-x64-debug)
 USR_LDFLAGS += /NODEFAULTLIB:LIBCMT
 endif
 
