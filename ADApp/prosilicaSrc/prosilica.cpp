@@ -23,7 +23,6 @@
 
 #include <epicsTime.h>
 #include <epicsThread.h>
-#include <epicsEvent.h>
 #include <epicsString.h>
 #include <epicsStdio.h>
 #include <epicsMutex.h>
