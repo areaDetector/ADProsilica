@@ -21,12 +21,14 @@ LIBRARY_IOC_Linux += prosilica
 LIBRARY_IOC_Darwin += prosilica
 LIB_SRCS += prosilica.cpp
 
-PROD_IOC_WIN32 += prosilicaApp
-PROD_IOC_Linux += prosilicaApp
-PROD_IOC_Darwin += prosilicaApp
+PROD_NAME += prosilicaApp
+PROD_IOC_WIN32 += $(PROD_NAME)
+PROD_IOC_Linux += $(PROD_NAME)
+PROD_IOC_Darwin += $(PROD_NAME)
 
 # <name>.dbd will be created from <name>Include.dbd
-DBD += prosilicaApp.dbd
+DBD +=  $(PROD_NAME).dbd
+$(PROD_NAME)_DBD += prosilicaSupport.dbd
 DBD += prosilicaSupport.dbd
 
 # <name>_registerRecordDeviceDriver.cpp will be created from <name>.dbd
