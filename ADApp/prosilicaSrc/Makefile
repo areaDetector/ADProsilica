@@ -21,7 +21,7 @@ LIBRARY_IOC_Linux += prosilica
 LIBRARY_IOC_Darwin += prosilica
 LIB_SRCS += prosilica.cpp
 
-PROD_NAME += prosilicaApp
+PROD_NAME = prosilicaApp
 PROD_IOC_WIN32 += $(PROD_NAME)
 PROD_IOC_Linux += $(PROD_NAME)
 PROD_IOC_Darwin += $(PROD_NAME)
