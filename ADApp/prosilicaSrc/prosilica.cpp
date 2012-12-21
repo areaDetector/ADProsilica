@@ -844,11 +844,11 @@ asynStatus prosilica::disconnectCamera()
     status |= PvCaptureEnd(this->PvHandle);
     status |= PvCameraClose(this->PvHandle);
     asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, 
-          "%s:%s: disconnecting camera %d\n", 
+          "%s:%s: disconnecting camera %lu\n", 
           driverName, functionName, this->uniqueId);
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: unable to close camera %d\n",
+              "%s:%s: unable to close camera %lu\n",
               driverName, functionName, this->uniqueId);
     }
     /* If we have allocated frame buffers, free them. */
@@ -892,7 +892,7 @@ asynStatus prosilica::connectCamera()
         status = PvCameraInfoEx(this->uniqueId, &this->PvCameraInfo, sizeof(this->PvCameraInfo));
         if (status) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-                  "%s:%s: Cannot find camera %d\n", 
+                  "%s:%s: Cannot find camera %lu\n", 
                   driverName, functionName, this->uniqueId);
             return asynError;
         }
@@ -917,7 +917,7 @@ asynStatus prosilica::connectCamera()
 
     if ((this->PvCameraInfo.PermittedAccess & ePvAccessMaster) == 0) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: Cannot get control of camera %d, access flags=%lx\n", 
+              "%s:%s: Cannot get control of camera %lu, access flags=%lx\n", 
                driverName, functionName, this->uniqueId, this->PvCameraInfo.PermittedAccess);
         return asynError;
     }
@@ -929,7 +929,7 @@ asynStatus prosilica::connectCamera()
     
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: unable to open camera %d\n",
+              "%s:%s: unable to open camera %lu\n",
               driverName, functionName, this->uniqueId);
        return asynError;
     }
@@ -938,7 +938,7 @@ asynStatus prosilica::connectCamera()
     status = PvCaptureAdjustPacketSize(this->PvHandle, MAX_PACKET_SIZE);
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: unable to adjust packet size %d\n",
+              "%s:%s: unable to adjust packet size on camera %lu\n",
               driverName, functionName, this->uniqueId);
        return asynError;
     }
@@ -947,7 +947,7 @@ asynStatus prosilica::connectCamera()
     status = PvCaptureStart(this->PvHandle);
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: unable to start capture on camera %d\n",
+              "%s:%s: unable to start capture on camera %lu\n",
               driverName, functionName, this->uniqueId);
         return asynError;
     }
@@ -967,7 +967,7 @@ asynStatus prosilica::connectCamera()
                               sizeof(this->IPAddress), &nchars);
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: unable to get sensor data on camera %d\n",
+              "%s:%s: unable to get sensor data on camera %lu\n",
               driverName, functionName, this->uniqueId);
         return asynError;
     }
@@ -985,7 +985,7 @@ asynStatus prosilica::connectCamera()
         pImage = this->pNDArrayPool->alloc(ndims, dims, NDInt8, this->maxFrameSize, NULL);
         if (!pImage) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-                  "%s:%s: unable to allocate image %d on camera %d\n",
+                  "%s:%s: unable to allocate image %d on camera %lu\n",
                   driverName, functionName, i, this->uniqueId);
             return asynError;
         }
@@ -999,7 +999,7 @@ asynStatus prosilica::connectCamera()
         status = PvCaptureQueueFrame(this->PvHandle, pFrame, frameCallbackC); 
         if (status) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-                  "%s:%s: unable to queue frame %d on camera %d\n",
+                  "%s:%s: unable to queue frame %d on camera %lu\n",
                   driverName, functionName, i, this->uniqueId);
             return asynError;
         }
@@ -1015,7 +1015,7 @@ asynStatus prosilica::connectCamera()
     status |= setIntegerParam(PSBadFrameCounter, 0);
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-              "%s:%s: unable to set camera parameters on camera %d\n",
+              "%s:%s: unable to set camera parameters on camera %lu\n",
               driverName, functionName, this->uniqueId);
         return asynError;
     }
