@@ -77,6 +77,8 @@ protected:
     #define FIRST_PS_PARAM PSReadStatistics
     int PSDriverType;
     int PSFilterVersion;
+    int PSTimestampType;
+    int PSResetTimer;
     int PSFrameRate;
     int PSByteRate;
     int PSPacketSize;
@@ -117,6 +119,7 @@ private:
     asynStatus readParameters();
     asynStatus disconnectCamera();
     asynStatus connectCamera();
+    asynStatus syncTimer();
     
     /* These items are specific to the Prosilica driver */
     tPvHandle PvHandle;            /* GenericPointer for the Prosilica PvAPI library */
@@ -133,6 +136,7 @@ private:
     tPvUint32 sensorWidth;
     tPvUint32 sensorHeight;
     tPvUint32 timeStampFrequency;
+    struct epicsTimeStamp lastSyncTime;
 };
 
 #define NUM_PS_PARAMS ((int)(&LAST_PS_PARAM - &FIRST_PS_PARAM + 1))
@@ -148,6 +152,17 @@ typedef enum {
     PSTriggerStartFixedRate,
     PSTriggerStartSoftware
 } PSTriggerStartMode_t;
+
+
+/* These describe the contents of the NDArray timeStamp parameter */
+typedef enum {
+    PSTimestampTypeNativeTicks,   // The number of internal camera clock ticks which have elapsed since the last timer reset
+    PSTimestampTypeNativeSeconds, // The number of seconds which have elapsed since the last timer reset
+    PSTimestampTypePOSIX,         // IntegerPart(timeStamp) is the number of seconds since the POSIX Epoch (00:00:00 UTC, January 1, 1970)
+                                  // DecimalPart(timestamp) is the fraction of the second afterward
+    PSTimestampTypeEPICS          // IntegerPart(timeStamp) is the number of seconds since the EPICS Epoch (January 1, 1990)
+                                  // DecimalPart(timestamp) is the fraction of the second afterward
+} PSTimestampType_t;
 
 static const char *PSTriggerStartModes[] = {
     "Freerun",
@@ -216,6 +231,8 @@ static const char *PSStrobeModes[] = {
 #define PSReadStatisticsString       "PS_READ_STATISTICS"      /* (asynInt32,    r/w) Write to read statistics  */ 
 #define PSDriverTypeString           "PS_DRIVER_TYPE"          /* (asynOctet,    r/o) Ethernet driver type */ 
 #define PSFilterVersionString        "PS_FILTER_VERSION"       /* (asynOctet,    r/o) Ethernet packet filter version */ 
+#define PSTimestampTypeString        "PS_TIMESTAMP_TYPE"       /* (asynInt32,    r/w) Choose how the timestamping is performed */
+#define PSResetTimerString           "PS_RESET_TIMER"          /* (asynInt32,    n/a) Software timer reset/sync */
 #define PSFrameRateString            "PS_FRAME_RATE"           /* (asynFloat64,  r/o) Frame rate */ 
 #define PSByteRateString             "PS_BYTE_RATE"            /* (asynInt32,    r/w) Stream bytes per second */ 
 #define PSPacketSizeString           "PS_PACKET_SIZE"          /* (asynInt32,    r/o) Packet size */ 
@@ -348,6 +365,23 @@ static void PVDECL frameCallbackC(tPvFrame *pFrame)
     pPvt->frameCallback(pFrame);
 }
 
+
+/** Sync the camera time with an EPICS timestamp */
+asynStatus prosilica::syncTimer() {
+
+    //static const char *functionName = "syncTimer";
+    if (this->PvHandle) {
+        epicsTimeGetCurrent( &lastSyncTime );
+        // Tell the camera to reset its internal clock
+        PvCommandRun(this->PvHandle, "TimeStampReset");
+        return asynSuccess;
+    }
+    else {
+        return asynError;
+    }
+}
+
+
 /** This function gets called in a thread from the PvApi library when a new frame arrives */
 void prosilica::frameCallback(tPvFrame *pFrame)
 {
@@ -473,10 +507,45 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         
         /* Set the uniqueId and time stamp */
         pImage->uniqueId = pFrame->FrameCount;
-        if (this->timeStampFrequency == 0) this->timeStampFrequency = 1;
-        pImage->timeStamp = ((double)pFrame->TimestampLo + 
-                             (double)pFrame->TimestampHi*4294967296.)/this->timeStampFrequency;
-        
+        const double native_frame_ticks =  ((double)pFrame->TimestampLo + (double)pFrame->TimestampHi*4294967296.);
+
+        /* Determine how to set the timeStamp */
+        PSTimestampType_t timestamp_type = PSTimestampTypeNativeTicks;
+        getIntegerParam(PSTimestampType, (int*)&timestamp_type);
+
+
+        switch( timestamp_type ) {
+            case PSTimestampTypeNativeTicks:
+                pImage->timeStamp = native_frame_ticks;
+                break;
+
+            case PSTimestampTypeNativeSeconds:
+                if (this->timeStampFrequency == 0) this->timeStampFrequency = 1;
+                pImage->timeStamp = native_frame_ticks / this->timeStampFrequency;
+                break;
+
+            case PSTimestampTypePOSIX: {
+                    if (this->timeStampFrequency == 0) this->timeStampFrequency = 1;
+                    epicsTimeStamp epics_frame_time = lastSyncTime;
+                    epicsTimeAddSeconds( &epics_frame_time, native_frame_ticks/this->timeStampFrequency);
+                    timespec ts;
+                    epicsTimeToTimespec( &ts, &epics_frame_time );
+                    pImage->timeStamp = (double)ts.tv_sec + ((double)ts.tv_nsec * 1.0e-09);
+                }
+                break;
+
+            case PSTimestampTypeEPICS: {
+                    if (this->timeStampFrequency == 0) this->timeStampFrequency = 1;
+                    epicsTimeStamp epics_frame_time = lastSyncTime;
+                    epicsTimeAddSeconds( &epics_frame_time, native_frame_ticks/this->timeStampFrequency);
+                    pImage->timeStamp = (double)epics_frame_time.secPastEpoch + ((double)epics_frame_time.nsec * 1.0e-09);
+                }
+                break;
+
+            default:
+                pImage->timeStamp = native_frame_ticks;
+        }
+
         /* Get any attributes that have been defined for this driver */        
         this->getAttributes(pImage->pAttributeList);
         
@@ -1292,6 +1361,8 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
     } else if ((function == NDDataType) ||
                (function == NDColorMode)) {
             status = setPixelFormat();
+    } else if ( function == PSResetTimer ) {
+            status = syncTimer();
     } else {
             /* If this is not a parameter we have handled call the base class */
             if (function < FIRST_PS_PARAM) status = ADDriver::writeInt32(pasynUser, value);
@@ -1457,6 +1528,8 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     createParam(PSReadStatisticsString,    asynParamInt32,    &PSReadStatistics);
     createParam(PSDriverTypeString,        asynParamOctet,    &PSDriverType);
     createParam(PSFilterVersionString,     asynParamOctet,    &PSFilterVersion);
+    createParam(PSTimestampTypeString,     asynParamInt32,    &PSTimestampType);
+    createParam(PSResetTimerString,        asynParamInt32,    &PSResetTimer);
     createParam(PSFrameRateString,         asynParamFloat64,  &PSFrameRate);
     createParam(PSByteRateString,          asynParamInt32,    &PSByteRate);
     createParam(PSPacketSizeString,        asynParamInt32,    &PSPacketSize);
