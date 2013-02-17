@@ -42,20 +42,36 @@ static int PvApiInitialized;
 
 #define MAX_PVAPI_FRAMES  2  /**< Number of frame buffers for PvApi */
 #define MAX_PACKET_SIZE 8228
-                                      
+ 
+/* Static functions to interface with PvAPI */
+static void PVDECL GlobalCameraLinkCallback(void* Context, tPvInterface Interface, 
+                                            tPvLinkEvent Event, unsigned long UniqueId);
+                                     
 /** Driver for Prosilica GigE and CameraLink cameras using their PvApi library */
 class prosilica : public ADDriver {
 public:
+    /* Constructor and Destructor */
     prosilica(const char *portName, const char *cameraId, int maxBuffers, size_t maxMemory,
               int priority, int stackSize, int maxPvAPIFrames);
-                 
+    ~prosilica();
+
+    /* These methods are overwritten from asynPortDriver */
+    virtual asynStatus connect(asynUser* pasynUser);
+    virtual asynStatus disconnect(asynUser* pasynUser);
+
     /* These are the methods that we override from ADDriver */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
     virtual asynStatus writeFloat64(asynUser *pasynUser, epicsFloat64 value);
     void report(FILE *fp, int details);
-    void frameCallback(tPvFrame *pFrame); /**< This should be private, but is called from C, must be public */
-    void shutdown(); /** This is called by epicsAtExit */
+    
+    /* These are called from C and so must be public */
+     /* This is called by the AVT driver when the connection status of a camera changes */
+    asynStatus cameraLinkCallback(tPvInterface Interface, tPvLinkEvent Event, unsigned long UniqueId);
+    void frameCallback(tPvFrame *pFrame);
+    /* Removes the PvAPI callback functions and disconnects the camera */
+    static void shutdown(void *arg);
 
+ 
 protected:
     int PSReadStatistics;
     #define FIRST_PS_PARAM PSReadStatistics
@@ -231,21 +247,99 @@ static const char *PSStrobeModes[] = {
 #define PSStrobe1CtlDurationString   "PS_STROBE_1_CTL_DURATION"/* (asynInt32,    r/w) Strobe 1 controlled duration */
 #define PSStrobe1DurationString      "PS_STROBE_1_DURATION"    /* (asynFloat64,  r/w) Strobe 1 duration */
 
-static void c_shutdown(void* arg) {
+void prosilica::shutdown (void* arg) {
+
     prosilica *p = (prosilica*)arg;
-    p->shutdown();
+    if (p) delete p;
 }
 
-void prosilica::shutdown() {
-    printf("Closing Prosilica camera...");
-    if (this->PvHandle) {
-        PvCaptureQueueClear(this->PvHandle);
-        PvCaptureEnd(this->PvHandle);
-        PvCameraClose(this->PvHandle);
+
+prosilica::~prosilica() {
+
+    int status;
+    static const char *functionName = "~prosilica";
+
+    this->lock();
+    disconnectCamera();
+    this->unlock();
+    status = PvLinkCallbackUnRegister(GlobalCameraLinkCallback, ePvLinkAdd);
+    if (status) {
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+            "%s:%s: error calling PvLinkCallbackUnRegister for ePvLinkAdd, status=%d\n",
+            driverName, functionName, status);
     }
-    PvUnInitialize();
-    printf("OK\n");
-}    
+    status = PvLinkCallbackUnRegister(GlobalCameraLinkCallback, ePvLinkRemove);
+    if (status) {
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+            "%s:%s: error calling PvLinkCallbackUnRegister for ePvLinkRemove, status=%d\n",
+            driverName, functionName, status);
+    }
+
+    if (PvApiInitialized) {
+        printf("Uninitializing PvAPI\n");
+        PvUnInitialize();
+        PvApiInitialized = false;
+    }
+}
+
+
+// callback function called on seperate thread when a registered camera event received
+void PVDECL GlobalCameraLinkCallback(void* Context,
+                                     tPvInterface Interface,
+                                     tPvLinkEvent Event,
+                                     unsigned long UniqueId) {
+ 
+    prosilica *p = (prosilica*)Context;
+    if ( p ) p->cameraLinkCallback(Interface, Event, UniqueId);
+}
+
+// Changes the connection status of the camera based on information from the AVT library
+asynStatus prosilica::cameraLinkCallback( tPvInterface Interface, tPvLinkEvent Event, unsigned long UniqueId ) {
+
+    asynStatus status = asynSuccess;
+    //static const char *functionName = "cameraLinkCallback";
+    
+    this->lock();
+    switch( Event ) {
+        case ePvLinkAdd: {
+            // We cannot check to see if the UniqueId matches ours, because the camera may have been
+            // specified by IP address or IP name and may never have connected yet, so we don't know its
+            // uniqueId.
+            // So instead whenever any camera comes online and we are not connected we try to connect to it, 
+            // in hopes that it is our camera.
+            if (this->PvHandle == 0) {
+                status = this->connectCamera();
+            }
+            break;
+        }
+        case ePvLinkRemove: {
+            if( UniqueId == this->uniqueId ) {
+                // the camera has disconnected
+                status = this->disconnectCamera();
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    this->unlock();
+    return status;
+}
+
+
+/* From asynPortDriver: Connects driver to device; */
+asynStatus prosilica::connect( asynUser* pasynUser ) {
+
+    return connectCamera();
+}
+
+
+/* From asynPortDriver: Disconnects driver from device; */
+asynStatus prosilica::disconnect( asynUser* pasynUser ) {
+
+    return disconnectCamera();
+}
+
 
 static void PVDECL frameCallbackC(tPvFrame *pFrame)
 {
@@ -839,12 +933,24 @@ asynStatus prosilica::disconnectCamera()
     NDArray *pImage;
     static const char *functionName = "disconnectCamera";
 
+    /* Ensure that PvAPI has been initialised */
+    if ( !PvApiInitialized ) {
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+            "%s:%s: Disconnecting from camera %ld while the PvAPI is uninitialized.\n", 
+            driverName, functionName, this->uniqueId);
+        return asynError;
+    }
+
     if (!this->PvHandle) return(asynSuccess);
+    // We have the lock at this point, but these functions can block resulting in a deadlock
+    //  Release the lock
+    unlock();
     status |= PvCaptureQueueClear(this->PvHandle);
     status |= PvCaptureEnd(this->PvHandle);
     status |= PvCameraClose(this->PvHandle);
+    lock();
     asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, 
-          "%s:%s: disconnecting camera %lu\n", 
+          "%s:%s: disconnecting camera %ld\n", 
           driverName, functionName, this->uniqueId);
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
@@ -853,14 +959,26 @@ asynStatus prosilica::disconnectCamera()
     }
     /* If we have allocated frame buffers, free them. */
     /* Must first free any image buffers they point to */
-    pFrame = this->PvFrames;
-    while (pFrame) {
+    for( int i = 0; i < maxPvAPIFrames_; i++ ) {
+        pFrame = &(this->PvFrames[i]);
+        if (! pFrame ) continue;
+
         pImage = (NDArray *)pFrame->Context[1];
         if (pImage) pImage->release();
         pFrame->Context[1] = 0;
-        pFrame++;
     }
+
     this->PvHandle = NULL;
+    /* We've disconnected the camera. Signal to asynManager that we are disconnected. */
+    status = pasynManager->exceptionDisconnect(this->pasynUserSelf);
+    if (status) {
+        asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+            "%s:%s: error calling pasynManager->exceptionDisconnect, error=%s\n",
+            driverName, functionName, pasynUserSelf->errorMessage);
+    }
+    asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, 
+        "%s:%s: Camera disconnected; unique id: %ld\n", 
+        driverName, functionName, this->uniqueId);
     return((asynStatus)status);
 }
 
@@ -878,10 +996,19 @@ asynStatus prosilica::connectCamera()
     bool isUniqueId;
     static const char *functionName = "connectCamera";
 
+    /* Ensure that PvAPI has been initialised */
+    if ( !PvApiInitialized ) {
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+            "%s:%s: Connecting to camera %ld while the PvAPI is uninitialized.\n", 
+            driverName, functionName, this->uniqueId);
+        return asynError;
+    }
+
     /* First disconnect from the camera */
     disconnectCamera();
     
-    /* Determine if we have been passed a uniqueID (all characters in cameraId are digits), or an IP address (anything else) */
+    /* Determine if we have been passed a uniqueID (all characters in cameraId are digits), 
+     * or an IP address (anything else) */
     isUniqueId = true;
     for (i=0; i<(int)strlen(this->cameraId); i++) {
       if (!isdigit(this->cameraId[i])) isUniqueId = false;
@@ -931,7 +1058,8 @@ asynStatus prosilica::connectCamera()
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
               "%s:%s: unable to open camera %lu\n",
               driverName, functionName, this->uniqueId);
-       return asynError;
+        this->PvHandle = NULL;
+        return asynError;
     }
     
     /* Negotiate maximum frame size */
@@ -1034,8 +1162,17 @@ asynStatus prosilica::connectCamera()
     PvCommandRun(this->PvHandle, "AcquisitionAbort");
         
     /* We found the camera and everything is OK.  Signal to asynManager that we are connected. */
-    pasynManager->exceptionConnect(this->pasynUserSelf);
-    return((asynStatus)status);
+    status = pasynManager->exceptionConnect(this->pasynUserSelf);
+    if (status) {
+        asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+            "%s:%s: error calling pasynManager->exceptionConnect, error=%s\n",
+            driverName, functionName, pasynUserSelf->errorMessage);
+        return asynError;
+    }
+    asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, 
+        "%s:%s: Camera connected; unique id: %ld\n", 
+        driverName, functionName, this->uniqueId);
+    return asynSuccess;
 }
 
 
@@ -1153,7 +1290,7 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
     } else if (function == PSStrobe1CtlDuration) {
             status |= PvAttrEnumSet(this->PvHandle, "Strobe1ControlledDuration", value ? "On":"Off");
     } else if ((function == NDDataType) ||
-                (function == NDColorMode)) {
+               (function == NDColorMode)) {
             status = setPixelFormat();
     } else {
             /* If this is not a parameter we have handled call the base class */
@@ -1307,7 +1444,7 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
                      int priority, int stackSize, int maxPvAPIFrames)
     : ADDriver(portName, 1, NUM_PS_PARAMS, maxBuffers, maxMemory, 
                0, 0,               /* No interfaces beyond those set in ADDriver.cpp */
-               ASYN_CANBLOCK, 1,   /* ASYN_CANBLOCK=1, ASYN_MULTIDEVICE=0, autoConnect=1 */
+               ASYN_CANBLOCK, 0,   /* ASYN_CANBLOCK=1, ASYN_MULTIDEVICE=0, autoConnect=1 */
                priority, stackSize), 
       PvHandle(NULL), maxPvAPIFrames_(maxPvAPIFrames), framesRemaining(0) 
 
@@ -1360,6 +1497,7 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     if (maxPvAPIFrames_ == 0) maxPvAPIFrames_ = MAX_PVAPI_FRAMES;
     /* Create the PvFrames buffer.  Note that these structures must be set to 0! */
     PvFrames = (tPvFrame *)calloc(maxPvAPIFrames_, sizeof(tPvFrame));
+    
 
     /* Initialize the Prosilica PvAPI library 
      * We get an error if we call this twice, so we need a global flag to see if 
@@ -1374,13 +1512,24 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
         PvApiInitialized = 1;
     }
     
+    tPvErr errCode;
+    // register camera connection callback
+    if((errCode = PvLinkCallbackRegister(GlobalCameraLinkCallback,ePvLinkAdd,(void*)this)) != ePvErrSuccess)
+        printf("PvLinkCallbackRegister err: %u\n", errCode);
+
+    // register camera disconnection callback
+    if((errCode = PvLinkCallbackRegister(GlobalCameraLinkCallback,ePvLinkRemove,(void*)this)) != ePvErrSuccess)
+        printf("PvLinkCallbackRegister err: %u\n", errCode);
+
     /* Need to wait a short while for the PvAPI library to find the cameras (0.2 seconds is not long enough in 1.24) */
     epicsThreadSleep(1.0);
     
     /* Try to connect to the camera.  
      * It is not a fatal error if we cannot now, the camera may be off or owned by
      * someone else.  It may connect later. */
+    this->lock();
     status = connectCamera();
+    this->unlock();
     if (status) {
         printf("%s:%s: cannot connect to camera %s, manually connect when available.\n", 
                driverName, functionName, cameraId);
@@ -1388,8 +1537,7 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     }
     
     /* Register the shutdown function for epicsAtExit */
-    epicsAtExit(c_shutdown, (void*)this);
-        
+    epicsAtExit(shutdown, (void*)this);
 }
 
 /* Code for iocsh registration */
