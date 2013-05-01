@@ -2,7 +2,8 @@ TOP=../..
 include $(TOP)/configure/CONFIG
 #----------------------------------------
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
-#=============================
+
+#======== DETECTOR LIBRARY ==============
 
 USR_CXXFLAGS_Linux += -D_LINUX -D_x86
 USR_CXXFLAGS_Darwin += -D_OSX -D_x86
@@ -21,23 +22,28 @@ LIBRARY_IOC_Linux += prosilica
 LIBRARY_IOC_Darwin += prosilica
 LIB_SRCS += prosilica.cpp
 
+DBD += prosilicaSupport.dbd
+
+#====== DETECTOR APPLICATION ============
+
+ifeq ($(BUILD_APPS), YES)
 PROD_NAME = prosilicaApp
-PROD_IOC_WIN32 += $(PROD_NAME)
-PROD_IOC_Linux += $(PROD_NAME)
+PROD_IOC_WIN32  += $(PROD_NAME)
+PROD_IOC_Linux  += $(PROD_NAME)
 PROD_IOC_Darwin += $(PROD_NAME)
 
 # <name>.dbd will be created from <name>Include.dbd
 DBD +=  $(PROD_NAME).dbd
 $(PROD_NAME)_DBD += prosilicaSupport.dbd
-DBD += prosilicaSupport.dbd
 
 # <name>_registerRecordDeviceDriver.cpp will be created from <name>.dbd
-PROD_SRCS += prosilicaApp_registerRecordDeviceDriver.cpp prosilicaAppMain.cpp
+PROD_SRCS += $(PROD_NAME)_registerRecordDeviceDriver.cpp $(PROD_NAME)Main.cpp
 
 # Add locally compiled object code
 PROD_LIBS += prosilica
 
 include $(TOP)/ADApp/commonDriverMakefile
+endif
 
 #=============================
 
