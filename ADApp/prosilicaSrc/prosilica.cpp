@@ -30,12 +30,13 @@
 #include <cantProceed.h>
 #include <osiSock.h>
 #include <iocsh.h>
-#include <epicsExport.h>
 #include <epicsExit.h>
 
 #include "PvApi.h"
 
 #include "ADDriver.h"
+
+#include <epicsExport.h>
 
 static const char *driverName = "prosilica";
 
