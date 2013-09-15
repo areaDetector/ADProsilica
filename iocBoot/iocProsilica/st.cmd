@@ -23,8 +23,8 @@ epicsEnvSet("NCHANS", "2048")
 # The Unique ID will be displayed on the first line in the information window.
 #prosilicaConfig("$(PORT)", 51031, 50, 0, 0, 0, 10)
 #prosilicaConfig("$(PORT)", 50022, 50, 0)
-prosilicaConfig("$(PORT)", 164.54.160.203, 50, 0)
-#prosilicaConfig("$(PORT)", 51039, 50, 0)
+#prosilicaConfig("$(PORT)", 164.54.160.203, 50, 0)
+prosilicaConfig("$(PORT)", 51039, 50, 0)
 
 asynSetTraceIOMask("$(PORT)",0,2)
 #asynSetTraceMask("$(PORT)",0,255)
@@ -34,9 +34,9 @@ dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/NDFile.template",   "P=$(PREFIX),R=cam1
 # Note that prosilica.template must be loaded after NDFile.template to replace the file format correctly
 dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/prosilica.template","P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1")
 
-#prosilicaConfig("PS2", 50022, 10, 50000000)
-#dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/ADBase.template",   "P=$(PREFIX),R=cam2:,PORT=PS2,ADDR=0,TIMEOUT=1")
-#dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/prosilica.template","P=$(PREFIX),R=cam2:,PORT=PS2,ADDR=0,TIMEOUT=1")
+prosilicaConfig("PS2", 51031, 50, 0)
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/ADBase.template",   "P=$(PREFIX),R=cam2:,PORT=PS2,ADDR=0,TIMEOUT=1")
+dbLoadRecords("$(AREA_DETECTOR)/ADApp/Db/prosilica.template","P=$(PREFIX),R=cam2:,PORT=PS2,ADDR=0,TIMEOUT=1")
 
 # Create a standard arrays plugin, set it to get data from first Prosilica driver.
 NDStdArraysConfigure("Image1", 5, 0, "$(PORT)", 0, 0)
