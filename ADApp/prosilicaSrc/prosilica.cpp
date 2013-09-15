@@ -551,12 +551,12 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         
         /* Set the uniqueId and time stamp */
         pImage->uniqueId = pFrame->FrameCount;
+        updateTimeStamp(&pImage->epicsTS);
         const double native_frame_ticks =  ((double)pFrame->TimestampLo + (double)pFrame->TimestampHi*4294967296.);
 
         /* Determine how to set the timeStamp */
         PSTimestampType_t timestamp_type = PSTimestampTypeNativeTicks;
         getIntegerParam(PSTimestampType, (int*)&timestamp_type);
-
 
         switch (timestamp_type) {
             case PSTimestampTypeNativeTicks:
