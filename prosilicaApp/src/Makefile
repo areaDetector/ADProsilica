@@ -24,7 +24,7 @@ LIB_SRCS += prosilica.cpp
 
 DBD += prosilicaSupport.dbd
 
-include $(ADCORE)/ADApp/commonDriverMakefile
+#include $(ADCORE)/ADApp/commonDriverMakefile
 
 #=============================
 
