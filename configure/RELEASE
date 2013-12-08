@@ -14,6 +14,7 @@ SUPPORT=/corvette/home/epics/devel
 # ASYN is needed for base classes 
 ASYN=$(SUPPORT)/asyn-4-22
 
+AREA_DETECTOR=$(SUPPORT)/areaDetector-2-0
 ADCORE=$(SUPPORT)/areaDetector-2-0/ADCore
 
 # EPICS_BASE usually appears last so other apps can override stuff:
