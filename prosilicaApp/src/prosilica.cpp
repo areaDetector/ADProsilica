@@ -1,6 +1,6 @@
 /* prosilica.cpp
  *
- * This is a driver for Prosilica cameras (GigE and CameraLink).
+ * This is a driver for Prosilica (now AVT) cameras (GigE and CameraLink).
  *
  * Author: Mark Rivers
  *         University of Chicago
