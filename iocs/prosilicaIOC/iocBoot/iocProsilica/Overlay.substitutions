@@ -1,5 +1,5 @@
 # This file defines 6 overlays.  The first 4 get their position and size from 4 ROIs; the last 2 are user-defined cursors
-file "$(AREA_DETECTOR)/ADApp/Db/NDOverlayN.template"
+file "$(ADCORE)/db/NDOverlayN.template"
 {
 pattern
 {     P,        R, NAME, SHAPE,      O,                XPOS,                YPOS,                XSIZE,                YSIZE,  PORT, ADDR, TIMEOUT}
