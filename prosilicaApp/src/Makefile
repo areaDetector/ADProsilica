@@ -22,9 +22,11 @@ LIBRARY_IOC_Linux += prosilica
 LIBRARY_IOC_Darwin += prosilica
 LIB_SRCS += prosilica.cpp
 
+LIB_LIBS += PvAPI
+
 DBD += prosilicaSupport.dbd
 
-#include $(ADCORE)/ADApp/commonDriverMakefile
+include $(ADCORE)/ADApp/commonLibraryMakefile
 
 #=============================
 
