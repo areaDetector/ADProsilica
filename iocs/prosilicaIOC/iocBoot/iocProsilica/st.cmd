@@ -1,6 +1,6 @@
 errlogInit(20000)
 
-dbLoadDatabase("$(ADPROSILICAIOC)/dbd/prosilicaApp.dbd")
+dbLoadDatabase("$(TOP)/dbd/prosilicaApp.dbd")
 
 prosilicaApp_registerRecordDeviceDriver(pdbbase) 
 
