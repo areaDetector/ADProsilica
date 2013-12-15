@@ -7,4 +7,3 @@ include $(TOP)/../../../RELEASE_PATHS.local
 include $(TOP)/../../../RELEASE_PRODS.local
 
 ADPROSILICA=$(AREA_DETECTOR)/ADProsilica
-ADPROSILICAIOC=$(ADPROSILICA)/iocs/prosilicaIOC
