@@ -1,4 +1,4 @@
-ADPprosilica
+ADProsilica
 ===========
 An <a href="http://www.aps.anl.gov/epics/">EPICS</a> 
 <a href="http://cars.uchicago.edu/software/epics/areaDetector.html">areaDetector</a> 
