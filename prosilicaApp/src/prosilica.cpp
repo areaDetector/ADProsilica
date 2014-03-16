@@ -76,6 +76,7 @@ public:
 protected:
     int PSReadStatistics;
     #define FIRST_PS_PARAM PSReadStatistics
+    int PSBayerConvert;
     int PSDriverType;
     int PSFilterVersion;
     int PSTimestampType;
@@ -171,6 +172,14 @@ typedef enum {
                                   // DecimalPart(timestamp) is the fraction of the second afterward
 } PSTimestampType_t;
 
+
+typedef enum {
+    PSBayerConvertNone,
+    PSBayerConvertRGB1,
+    PSBayerConvertRGB2,
+    PSBayerConvertRGB3,
+} PSBayerConvert_t;
+
 static const char *PSTriggerStartModes[] = {
     "Freerun",
     "SyncIn1",
@@ -236,6 +245,7 @@ static const char *PSStrobeModes[] = {
 /** Driver-specific parameters for the Prosilica driver */
     /*                                       String              asyn interface  access   Description  */
 #define PSReadStatisticsString       "PS_READ_STATISTICS"      /* (asynInt32,    r/w) Write to read statistics  */ 
+#define PSBayerConvertString         "PS_BAYER_CONVERT"        /* (asynInt32,    r/w) Convert Bayer to another format */ 
 #define PSDriverTypeString           "PS_DRIVER_TYPE"          /* (asynOctet,    r/o) Ethernet driver type */ 
 #define PSFilterVersionString        "PS_FILTER_VERSION"       /* (asynOctet,    r/o) Ethernet packet filter version */ 
 #define PSTimestampTypeString        "PS_TIMESTAMP_TYPE"       /* (asynInt32,    r/w) Choose how the timestamping is performed */
@@ -434,8 +444,10 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     int imageCounter;
     int arrayCallbacks;
     NDArray *pImage;
+    NDArray *pTempImage;
     int binX, binY;
     int badFrameCounter;
+    int bayerConvert;
     epicsInt32 bayerPattern, colorMode;
     static const char *functionName = "frameCallback";
 
@@ -452,10 +464,6 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     /* If we're out of memory, pImage will be NULL */
     if (pImage && pFrame->Status == ePvErrSuccess) {
         /* The frame we just received has NDArray* in Context[1] */ 
-        /* We save the most recent good image buffer so it can be used in the
-         * readADImage function.  Now release it. */
-        if (this->pArrays[0]) this->pArrays[0]->release();
-        this->pArrays[0] = pImage;
         /* Set the properties of the image to those of the current frame */
         /* Convert from the PvApi data types to ADDataType */
         /* The pFrame structure does not contain the binning, get that from param lib,
@@ -466,6 +474,8 @@ void prosilica::frameCallback(tPvFrame *pFrame)
          * crash the file plugin.  Fix it here. */
         if (pFrame->BayerPattern > ePvBayerBGGR) pFrame->BayerPattern = ePvBayerRGGB;
         bayerPattern = pFrame->BayerPattern;
+        getIntegerParam(PSBayerConvert, &bayerConvert);
+
         switch(pFrame->Format) {
             case ePvFmtMono8:
                 colorMode = NDColorModeMono;
@@ -478,6 +488,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->dims[1].offset  = pFrame->RegionY;
                 pImage->dims[1].binning = binY;
                 break;
+
             case ePvFmtMono16:
                 colorMode = NDColorModeMono;
                 pImage->dataType = NDUInt16;
@@ -489,28 +500,152 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->dims[1].offset  = pFrame->RegionY;
                 pImage->dims[1].binning = binY;
                 break;
+
             case ePvFmtBayer8:
-                colorMode = NDColorModeBayer;
-                pImage->dataType = NDUInt8;
-                pImage->ndims = 2;
-                pImage->dims[0].size   = pFrame->Width;
-                pImage->dims[0].offset = pFrame->RegionX;
-                pImage->dims[0].binning = binX;
-                pImage->dims[1].size   = pFrame->Height;
-                pImage->dims[1].offset = pFrame->RegionY;
-                pImage->dims[1].binning = binY;
+                if (bayerConvert == PSBayerConvertNone) {
+                    colorMode = NDColorModeBayer;
+                    pImage->dataType = NDUInt8;
+                    pImage->ndims = 2;
+                    pImage->dims[0].size   = pFrame->Width;
+                    pImage->dims[0].offset = pFrame->RegionX;
+                    pImage->dims[0].binning = binX;
+                    pImage->dims[1].size   = pFrame->Height;
+                    pImage->dims[1].offset = pFrame->RegionY;
+                    pImage->dims[1].binning = binY;
+                } else {
+                    pTempImage = pImage;
+                    pImage = pNDArrayPool->copy(pTempImage, NULL, 0);
+                    epicsUInt8 *pData = (epicsUInt8 *)pImage->pData;
+                    pImage->dataType = NDUInt8;
+                    switch (bayerConvert) {
+                        case PSBayerConvertRGB1: {
+                            PvUtilityColorInterpolate(pFrame, pData, pData+1, pData+2, 2, 0);
+                            colorMode = NDColorModeRGB1;
+                            pImage->ndims = 3;
+                            pImage->dims[0].size    = 3;
+                            pImage->dims[0].offset  = 0;
+                            pImage->dims[0].binning = 1;
+                            pImage->dims[1].size   = pFrame->Width;
+                            pImage->dims[1].offset = pFrame->RegionX;
+                            pImage->dims[1].binning = binX;
+                            pImage->dims[2].size   = pFrame->Height;
+                            pImage->dims[2].offset = pFrame->RegionY;
+                            pImage->dims[2].binning = binY;
+                            break;
+                        }
+
+                        case PSBayerConvertRGB2: {
+                            int rowSize = pFrame->Width;
+                            PvUtilityColorInterpolate(pFrame, pData,  pData+rowSize, pData+2*rowSize, 
+                                                      0, (unsigned long)(2*rowSize));
+                            colorMode = NDColorModeRGB2;
+                            pImage->ndims = 3;
+                            pImage->dims[0].size   = pFrame->Width;
+                            pImage->dims[0].offset = pFrame->RegionX;
+                            pImage->dims[0].binning = binX;
+                            pImage->dims[1].size    = 3;
+                            pImage->dims[1].offset  = 0;
+                            pImage->dims[1].binning = 1;
+                            pImage->dims[2].size   = pFrame->Height;
+                            pImage->dims[2].offset = pFrame->RegionY;
+                            pImage->dims[2].binning = binY;
+                            break;
+                        }
+
+                        case PSBayerConvertRGB3: {
+                            int imageSize = pFrame->Width * pFrame->Height;
+                            PvUtilityColorInterpolate(pFrame, pData,  pData+imageSize, pData+2*imageSize, 0, 0);
+                            colorMode = NDColorModeRGB3;
+                            pImage->ndims = 3;
+                            pImage->dims[0].size   = pFrame->Width;
+                            pImage->dims[0].offset = pFrame->RegionX;
+                            pImage->dims[0].binning = binX;
+                            pImage->dims[1].size   = pFrame->Height;
+                            pImage->dims[1].offset = pFrame->RegionY;
+                            pImage->dims[1].binning = binY;
+                            pImage->dims[2].size    = 3;
+                            pImage->dims[2].offset  = 0;
+                            pImage->dims[2].binning = 1;
+                            break;
+                        }
+                    }
+                    pTempImage->release();
+                }
                 break;
+
             case ePvFmtBayer16:
-                colorMode = NDColorModeBayer;
-                pImage->dataType = NDUInt16;
-                pImage->ndims = 2;
-                pImage->dims[0].size    = pFrame->Width;
-                pImage->dims[0].offset  = pFrame->RegionX;
-                pImage->dims[0].binning = binX;
-                pImage->dims[1].size    = pFrame->Height;
-                pImage->dims[1].offset  = pFrame->RegionY;
-                pImage->dims[1].binning = binY;
+                if (bayerConvert == PSBayerConvertNone) {
+                    colorMode = NDColorModeBayer;
+                    pImage->dataType = NDUInt16;
+                    pImage->ndims = 2;
+                    pImage->dims[0].size    = pFrame->Width;
+                    pImage->dims[0].offset  = pFrame->RegionX;
+                    pImage->dims[0].binning = binX;
+                    pImage->dims[1].size    = pFrame->Height;
+                    pImage->dims[1].offset  = pFrame->RegionY;
+                    pImage->dims[1].binning = binY;
+                } else {
+                    pTempImage = pImage;
+                    pImage = pNDArrayPool->copy(pTempImage, NULL, 0);
+                    epicsUInt16 *pData = (epicsUInt16 *)pImage->pData;
+                    pImage->dataType = NDUInt16;
+
+                    switch (bayerConvert) {
+                        case PSBayerConvertRGB1: {
+                            PvUtilityColorInterpolate(pFrame, pData, pData+1, pData+2, 2, 0);
+                            colorMode = NDColorModeRGB1;
+                            pImage->ndims = 3;
+                            pImage->dims[0].size    = 3;
+                            pImage->dims[0].offset  = 0;
+                            pImage->dims[0].binning = 1;
+                            pImage->dims[1].size   = pFrame->Width;
+                            pImage->dims[1].offset = pFrame->RegionX;
+                            pImage->dims[1].binning = binX;
+                            pImage->dims[2].size   = pFrame->Height;
+                            pImage->dims[2].offset = pFrame->RegionY;
+                            pImage->dims[2].binning = binY;
+                            break;
+                        }
+
+                        case PSBayerConvertRGB2: {
+                            int rowSize = pFrame->Width;
+                            PvUtilityColorInterpolate(pFrame, pData,  pData+rowSize, pData+2*rowSize, 
+                                                      0, (unsigned long)(2*rowSize));
+                            colorMode = NDColorModeRGB2;
+                            pImage->ndims = 3;
+                            pImage->dims[0].size   = pFrame->Width;
+                            pImage->dims[0].offset = pFrame->RegionX;
+                            pImage->dims[0].binning = binX;
+                            pImage->dims[1].size    = 3;
+                            pImage->dims[1].offset  = 0;
+                            pImage->dims[1].binning = 1;
+                            pImage->dims[2].size   = pFrame->Height;
+                            pImage->dims[2].offset = pFrame->RegionY;
+                            pImage->dims[2].binning = binY;
+                            break;
+                        }
+
+                        case PSBayerConvertRGB3: {
+                            int imageSize = pFrame->Width * pFrame->Height;
+                            PvUtilityColorInterpolate(pFrame, pData,  pData+imageSize, pData+2*imageSize, 0, 0);
+                            colorMode = NDColorModeRGB3;
+                            pImage->ndims = 3;
+                            pImage->dims[0].size   = pFrame->Width;
+                            pImage->dims[0].offset = pFrame->RegionX;
+                            pImage->dims[0].binning = binX;
+                            pImage->dims[1].size   = pFrame->Height;
+                            pImage->dims[1].offset = pFrame->RegionY;
+                            pImage->dims[1].binning = binY;
+                            pImage->dims[2].size    = 3;
+                            pImage->dims[2].offset  = 0;
+                            pImage->dims[2].binning = 1;
+                            break;
+                        }
+                    }
+                    pTempImage->release();
+                }
                 break;
+
             case ePvFmtRgb24:
                 colorMode = NDColorModeRGB1;
                 pImage->dataType = NDUInt8;
@@ -525,6 +660,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->dims[2].offset  = pFrame->RegionY;
                 pImage->dims[2].binning = binY;
                 break;
+
             case ePvFmtRgb48:
                 colorMode = NDColorModeRGB1;
                 pImage->dataType = NDUInt16;
@@ -539,6 +675,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 pImage->dims[2].offset  = pFrame->RegionY;
                 pImage->dims[2].binning = binY;
                 break;
+
             default:
                  /* We don't support other formats yet */
                 asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
@@ -620,6 +757,11 @@ void prosilica::frameCallback(tPvFrame *pFrame)
             (const char *)this->pArrays[0]->pData, this->pArrays[0]->dataSize,
             "%s:%s: frameId=%d, timeStamp=%f\n",
             driverName, functionName, pImage->uniqueId, pImage->timeStamp);
+
+        /* We save the most recent good image buffer so it can be used in the
+         * readADImage function.  Now release it. */
+        if (this->pArrays[0]) this->pArrays[0]->release();
+        this->pArrays[0] = pImage;
 
         /* Allocate a new image buffer, make the size be the maximum that the frames can be */
         ndims = 2;
@@ -1580,6 +1722,7 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     ellAdd(cameraList, (ELLNODE *)pNode);
     
     createParam(PSReadStatisticsString,    asynParamInt32,    &PSReadStatistics);
+    createParam(PSBayerConvertString,      asynParamInt32,    &PSBayerConvert);
     createParam(PSDriverTypeString,        asynParamOctet,    &PSDriverType);
     createParam(PSFilterVersionString,     asynParamOctet,    &PSFilterVersion);
     createParam(PSTimestampTypeString,     asynParamInt32,    &PSTimestampType);
