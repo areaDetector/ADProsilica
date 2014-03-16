@@ -1,3 +1,4 @@
+$(P)$(R)PSBayerConvert
 $(P)$(R)PSReadStatistics.SCAN
 $(P)$(R)PSByteRate
 $(P)$(R)SyncOut1Mode
