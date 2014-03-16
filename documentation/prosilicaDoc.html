@@ -112,6 +112,36 @@
       </tr>
       <tr>
         <td align="center" colspan="7,">
+          <b>Bayer Color Conversion</b></td>
+      </tr>
+      <tr>
+        <td>
+          PSBayerConvert</td>
+        <td>
+          asynInt32</td>
+        <td>
+          r/w</td>
+        <td>
+          Color conversion when NDColorMode is Bayer:<br />
+          None: Raw Bayer images are passed to the plugins<br />
+          RGB1: Bayer images are converted to RGB1<br />
+          RGB2: Bayer images are converted to RGB2<br />
+          RGB3: Bayer images are converted to RGB3<br />
+          Having the camera send Bayer images uses 3 times less network bandwidth than 
+          sending RGB1 images.  It does place more CPU load on the host to convert
+          from Bayer to RGB, but this is often an acceptable tradeoff.</td>
+        <td>
+          PS_BAYER_CONVERT</td>
+        <td>
+          $(P)$(R)BayerConvert<br />
+          $(P)$(R)BayerConvert_RBV</td>
+        <td>
+          mbbo
+          <br />
+          mbbi</td>
+      </tr>
+      <tr>
+        <td align="center" colspan="7,">
           <b>Trigger and I/O Control</b></td>
       </tr>
       <tr>
