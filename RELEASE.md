@@ -28,11 +28,9 @@ R2-0
 * Moved the repository to [Github](https://github.com/areaDetector/ADProsilica).
 * Re-organized the directory structure to separate the driver library from the example IOC application.
 * Fixes for connection management to handle multiple cameras per IOC. Thanks to Kate Feng.
-* Added ability to convert Bayer images to RGB1, RGB2, and RGB3 images.  This reduces the network
-  bandwidth load at the expense of more CPU load on the IOC host machine.  In areaDetector releases
-  prior to R-2.0 this capability existed in the NDPluginColorConvert plugin.  It has been removed
-  from NDPluginColorConvert so that it would no longer depend on the AVT PvAPI library.
-
+* Added support for conversion from raw Bayer to RGB1, RGB2, and RGB3 in the driver. 
+  In areaDetector releases prior to R2-0 this could be done in the NDPluginColorConvert plugin.  
+  That capability has been removed from the plugin to make the plugin independent of the AVT PvApi library.
 
 R1-9-1 and earlier
 ------------------
