@@ -440,7 +440,7 @@ asynStatus prosilica::syncTimer() {
 void prosilica::frameCallback(tPvFrame *pFrame)
 {
     int ndims;
-    size_t dims[2];
+    size_t dims[3];
     int imageCounter;
     int arrayCallbacks;
     NDArray *pImage;
@@ -514,9 +514,12 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                     pImage->dims[1].binning = binY;
                 } else {
                     pTempImage = pImage;
-                    pImage = pNDArrayPool->copy(pTempImage, NULL, 0);
+                    ndims = 3;
+                    dims[0] = 3;
+                    dims[1] = pFrame->Width;
+                    dims[2] = pFrame->Height;
+                    pImage = this->pNDArrayPool->alloc(ndims, dims, NDUInt8, this->maxFrameSize, NULL);
                     epicsUInt8 *pData = (epicsUInt8 *)pImage->pData;
-                    pImage->dataType = NDUInt8;
                     switch (bayerConvert) {
                         case PSBayerConvertRGB1: {
                             PvUtilityColorInterpolate(pFrame, pData, pData+1, pData+2, 2, 0);
@@ -586,9 +589,12 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                     pImage->dims[1].binning = binY;
                 } else {
                     pTempImage = pImage;
-                    pImage = pNDArrayPool->copy(pTempImage, NULL, 0);
+                    ndims = 3;
+                    dims[0] = 3;
+                    dims[1] = pFrame->Width;
+                    dims[2] = pFrame->Height;
+                    pImage = this->pNDArrayPool->alloc(ndims, dims, NDUInt16, this->maxFrameSize, NULL);
                     epicsUInt16 *pData = (epicsUInt16 *)pImage->pData;
-                    pImage->dataType = NDUInt16;
 
                     switch (bayerConvert) {
                         case PSBayerConvertRGB1: {
