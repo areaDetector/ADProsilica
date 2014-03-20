@@ -6,7 +6,7 @@ release 0
 x 149
 y 55
 w 715
-h 750
+h 740
 font "helvetica-medium-r-18.0"
 ctlFont "helvetica-medium-r-8.0"
 btnFont "helvetica-medium-r-18.0"
@@ -103,7 +103,7 @@ release 0
 x 5
 y 340
 w 350
-h 365
+h 385
 lineColor index 14
 fillColor index 14
 lineWidth 0
@@ -134,7 +134,7 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 173
+x 176
 y 370
 w 10
 h 20
@@ -274,7 +274,7 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 67
+x 70
 y 440
 w 70
 h 20
@@ -286,20 +286,6 @@ value {
  "Binning"
 }
 endObjectProperties
-
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 148
-y 465
-w 154
-h 40
-
-beginGroup
-
 
 # (Text Control)
 object activeXTextDspClass
@@ -403,18 +389,13 @@ objType "controls"
 newPos
 endObjectProperties
 
-endGroup
-
-endObjectProperties
-
-
 # (Static Text)
 object activeXTextClass
 beginObjectProperties
 major 4
 minor 0
 release 0
-x 87
+x 90
 y 485
 w 50
 h 20
@@ -433,7 +414,7 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 97
+x 100
 y 530
 w 40
 h 20
@@ -445,20 +426,6 @@ value {
  "Region size"
 }
 endObjectProperties
-
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 148
-y 510
-w 154
-h 40
-
-beginGroup
-
 
 # (Text Control)
 object activeXTextDspClass
@@ -562,18 +529,13 @@ objType "controls"
 newPos
 endObjectProperties
 
-endGroup
-
-endObjectProperties
-
-
 # (Static Text)
 object activeXTextClass
 beginObjectProperties
 major 4
 minor 0
 release 0
-x 27
+x 30
 y 395
 w 110
 h 20
@@ -636,27 +598,13 @@ objType "controls"
 newPos
 endObjectProperties
 
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 34
-y 570
-w 286
-h 120
-
-beginGroup
-
-
 # (Static Text)
 object activeXTextClass
 beginObjectProperties
 major 4
 minor 0
 release 0
-x 34
+x 40
 y 595
 w 180
 h 20
@@ -681,7 +629,6 @@ w 61
 h 18
 controlPv "$(P)$(R)ArraySize_RBV"
 font "helvetica-medium-r-8.0"
-fontAlign "center"
 smartRefresh
 fastUpdate
 fgColor index 54
@@ -693,20 +640,6 @@ useHexPrefix
 objType "controls"
 newPos
 endObjectProperties
-
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 97
-y 620
-w 205
-h 20
-
-beginGroup
-
 
 # (Text Control)
 object activeXTextDspClass
@@ -720,7 +653,6 @@ w 61
 h 18
 controlPv "$(P)$(R)Gain_RBV"
 font "helvetica-medium-r-8.0"
-fontAlign "center"
 smartRefresh
 fastUpdate
 fgColor index 54
@@ -765,7 +697,7 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 97
+x 100
 y 620
 w 40
 h 20
@@ -778,32 +710,13 @@ value {
 }
 endObjectProperties
 
-endGroup
-
-endObjectProperties
-
-
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 47
-y 645
-w 273
-h 20
-
-beginGroup
-
-
 # (Static Text)
 object activeXTextClass
 beginObjectProperties
 major 4
 minor 0
 release 0
-x 47
+x 50
 y 645
 w 90
 h 20
@@ -828,56 +741,6 @@ w 79
 h 18
 controlPv "$(P)$(R)DataType_RBV"
 font "helvetica-medium-r-8.0"
-fontAlign "center"
-smartRefresh
-fastUpdate
-fgColor index 54
-bgColor index 4
-autoHeight
-format "string"
-nullColor index 32
-useHexPrefix
-objType "controls"
-newPos
-endObjectProperties
-
-endGroup
-
-endObjectProperties
-
-
-# (Static Text)
-object activeXTextClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 47
-y 670
-w 90
-h 20
-font "helvetica-medium-r-8.0"
-fontAlign "right"
-fgColor index 14
-useDisplayBg
-value {
- "Color mode"
-}
-endObjectProperties
-
-# (Text Control)
-object activeXTextDspClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 241
-y 671
-w 79
-h 18
-controlPv "$(P)$(R)ColorMode_RBV"
-font "helvetica-medium-r-8.0"
-fontAlign "center"
 smartRefresh
 fastUpdate
 fgColor index 54
@@ -896,7 +759,7 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 37
+x 40
 y 570
 w 100
 h 20
@@ -946,7 +809,6 @@ w 61
 h 18
 controlPv "$(P)$(R)ArraySizeY_RBV"
 font "helvetica-medium-r-8.0"
-fontAlign "center"
 smartRefresh
 fastUpdate
 fgColor index 54
@@ -959,19 +821,14 @@ objType "controls"
 newPos
 endObjectProperties
 
-endGroup
-
-endObjectProperties
-
-
 # (Group)
 object activeGroupClass
 beginObjectProperties
 major 4
 minor 0
 release 0
-x 20
-y 720
+x 383
+y 676
 w 298
 h 20
 
@@ -984,8 +841,8 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 20
-y 720
+x 383
+y 676
 w 220
 h 20
 font "helvetica-medium-r-8.0"
@@ -2048,6 +1905,92 @@ endGroup
 
 endObjectProperties
 
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 50
+y 670
+w 90
+h 20
+font "helvetica-medium-r-8.0"
+fontAlign "right"
+fgColor index 14
+useDisplayBg
+value {
+ "Color mode"
+}
+endObjectProperties
+
+# (Text Control)
+object activeXTextDspClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 241
+y 671
+w 79
+h 18
+controlPv "$(P)$(R)ColorMode_RBV"
+font "helvetica-medium-r-8.0"
+smartRefresh
+fastUpdate
+fgColor index 54
+bgColor index 4
+autoHeight
+format "string"
+nullColor index 32
+useHexPrefix
+objType "controls"
+newPos
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 50
+y 695
+w 90
+h 20
+font "helvetica-medium-r-8.0"
+fontAlign "right"
+fgColor index 14
+useDisplayBg
+value {
+ "Bayer convert"
+}
+endObjectProperties
+
+# (Text Control)
+object activeXTextDspClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 241
+y 696
+w 79
+h 18
+controlPv "$(P)$(R)BayerConvert_RBV"
+font "helvetica-medium-r-8.0"
+smartRefresh
+fastUpdate
+fgColor index 54
+bgColor index 4
+autoHeight
+format "string"
+nullColor index 32
+useHexPrefix
+objType "controls"
+newPos
+endObjectProperties
 # (Group)
 object activeGroupClass
 beginObjectProperties
@@ -2066,86 +2009,6 @@ endGroup
 
 endObjectProperties
 
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 148
-y 465
-w 154
-h 40
-
-beginGroup
-
-
-endGroup
-
-endObjectProperties
-
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 148
-y 510
-w 154
-h 40
-
-beginGroup
-
-
-endGroup
-
-endObjectProperties
-
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 34
-y 570
-w 286
-h 120
-
-beginGroup
-
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 97
-y 620
-w 205
-h 20
-
-beginGroup
-
-
-endGroup
-
-endObjectProperties
-
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 47
-y 645
-w 273
-h 20
-
-beginGroup
-
 
 # (Menu Button)
 object activeMenuButtonClass
@@ -2153,7 +2016,7 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 143
+x 148
 y 645
 w 80
 h 20
@@ -2166,44 +2029,14 @@ controlPv "$(P)$(R)DataType"
 indicatorPv "$(P)$(R)DataType"
 font "helvetica-medium-r-10.0"
 endObjectProperties
-
-endGroup
-
-endObjectProperties
-
-
-# (Menu Button)
-object activeMenuButtonClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 143
-y 670
-w 80
-h 20
-fgColor index 14
-bgColor index 51
-inconsistentColor index 12
-topShadowColor index 2
-botShadowColor index 12
-controlPv "$(P)$(R)ColorMode"
-indicatorPv "$(P)$(R)ColorMode"
-font "helvetica-medium-r-10.0"
-endObjectProperties
-
-endGroup
-
-endObjectProperties
-
 # (Group)
 object activeGroupClass
 beginObjectProperties
 major 4
 minor 0
 release 0
-x 20
-y 720
+x 383
+y 676
 w 298
 h 20
 
@@ -2216,8 +2049,8 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 248
-y 720
+x 611
+y 676
 w 70
 h 20
 fgColor index 14
@@ -2540,4 +2373,44 @@ endGroup
 
 endObjectProperties
 
+
+# (Menu Button)
+object activeMenuButtonClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 148
+y 670
+w 80
+h 20
+fgColor index 14
+bgColor index 51
+inconsistentColor index 12
+topShadowColor index 2
+botShadowColor index 12
+controlPv "$(P)$(R)ColorMode"
+indicatorPv "$(P)$(R)ColorMode"
+font "helvetica-medium-r-10.0"
+endObjectProperties
+
+# (Menu Button)
+object activeMenuButtonClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 148
+y 695
+w 80
+h 20
+fgColor index 14
+bgColor index 51
+inconsistentColor index 12
+topShadowColor index 2
+botShadowColor index 12
+controlPv "$(P)$(R)BayerConvert"
+indicatorPv "$(P)$(R)BayerConvert"
+font "helvetica-medium-r-10.0"
+endObjectProperties
 
