@@ -760,7 +760,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         setIntegerParam(NDArrayCounter, imageCounter);
 
         asynPrintIO(this->pasynUserSelf, ASYN_TRACEIO_DRIVER, 
-            (const char *)this->pArrays[0]->pData, this->pArrays[0]->dataSize,
+            (const char *)pImage->pData, pImage->dataSize,
             "%s:%s: frameId=%d, timeStamp=%f\n",
             driverName, functionName, pImage->uniqueId, pImage->timeStamp);
 
