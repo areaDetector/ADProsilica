@@ -23,6 +23,11 @@ files respectively, in the configure/ directory of the appropriate release of th
 Release Notes
 =============
 
+R2-1
+----
+Fixed bug in asynPrintIO call in frameCallback. It was printing data on previous frame, not current frame,
+and would crash if executed on first callback.
+
 R2-0
 ----
 * Moved the repository to [Github](https://github.com/areaDetector/ADProsilica).
