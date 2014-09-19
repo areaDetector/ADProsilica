@@ -23,12 +23,12 @@ files respectively, in the configure/ directory of the appropriate release of th
 Release Notes
 =============
 
-R2-1
+R2-1 (September XXX, 2014)
 ----
 Fixed bug in asynPrintIO call in frameCallback. It was printing data on previous frame, not current frame,
 and would crash if executed on first callback.
 
-R2-0
+R2-0 (March 20, 2014)
 ----
 * Moved the repository to [Github](https://github.com/areaDetector/ADProsilica).
 * Re-organized the directory structure to separate the driver library from the example IOC application.
