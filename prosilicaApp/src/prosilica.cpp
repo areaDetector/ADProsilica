@@ -83,6 +83,8 @@ protected:
     int PSResetTimer;
     int PSFrameRate;
     int PSByteRate;
+    int PSResendLookback;
+    int PSResendRetries;
     int PSPacketSize;
     int PSFramesCompleted;
     int PSFramesDropped;
@@ -252,6 +254,8 @@ static const char *PSStrobeModes[] = {
 #define PSResetTimerString           "PS_RESET_TIMER"          /* (asynInt32,    n/a) Software timer reset/sync */
 #define PSFrameRateString            "PS_FRAME_RATE"           /* (asynFloat64,  r/o) Frame rate */ 
 #define PSByteRateString             "PS_BYTE_RATE"            /* (asynInt32,    r/w) Stream bytes per second */ 
+#define PSResendLookbackString       "PS_RESEND_LOOKBACK"      /* (asynInt32,    r/w) How long to wait for missing pkts */
+#define PSResendRetriesString        "PS_RESEND_RETRIES"       /* (asynInt32,    r/w) How many retries for missing packets */ 
 #define PSPacketSizeString           "PS_PACKET_SIZE"          /* (asynInt32,    r/o) Packet size */ 
 #define PSFramesCompletedString      "PS_FRAMES_COMPLETED"     /* (asynInt32,    r/o) Frames completed */ 
 #define PSFramesDroppedString        "PS_FRAMES_DROPPED"       /* (asynInt32,    r/o) Frames dropped */ 
@@ -447,8 +451,9 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     NDArray *pTempImage;
     int binX, binY;
     int badFrameCounter;
-    int bayerConvert;
-    epicsInt32 bayerPattern, colorMode;
+    int bayerConvert = PSBayerConvertNone;
+    epicsInt32 bayerPattern;
+    epicsInt32 colorMode    = NDColorModeMono;
     static const char *functionName = "frameCallback";
 
     /* If this callback is coming from a shutdown operation rather than normal collection, 
@@ -521,6 +526,11 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                     pImage = this->pNDArrayPool->alloc(ndims, dims, NDUInt8, this->maxFrameSize, NULL);
                     epicsUInt8 *pData = (epicsUInt8 *)pImage->pData;
                     switch (bayerConvert) {
+                        default:
+                            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+                                "%s:%s: error unsupported bayerConvert value %d\n", 
+                                driverName, functionName, bayerConvert );
+                            break;
                         case PSBayerConvertRGB1: {
                             PvUtilityColorInterpolate(pFrame, pData, pData+1, pData+2, 2, 0);
                             colorMode = NDColorModeRGB1;
@@ -597,6 +607,11 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                     epicsUInt16 *pData = (epicsUInt16 *)pImage->pData;
 
                     switch (bayerConvert) {
+                        default:
+                            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+                                "%s:%s: error unsupported bayerConvert value %d\n", 
+                                driverName, functionName, bayerConvert );
+                            break;
                         case PSBayerConvertRGB1: {
                             PvUtilityColorInterpolate(pFrame, pData, pData+1, pData+2, 2, 0);
                             colorMode = NDColorModeRGB1;
@@ -691,7 +706,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         }
         pImage->pAttributeList->add("BayerPattern", "Bayer Pattern", NDAttrInt32, &bayerPattern);
         pImage->pAttributeList->add("ColorMode", "Color Mode", NDAttrInt32, &colorMode);
-        
+
         /* Set the uniqueId and time stamp */
         pImage->uniqueId = pFrame->FrameCount;
         updateTimeStamp(&pImage->epicsTS);
@@ -914,7 +929,11 @@ asynStatus prosilica::readStats()
     int i;
     float fval;
     static const char *functionName = "readStats";
-    
+
+    asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, 
+        "%s:%s: Updating network statistics ...\n",
+        driverName, functionName );
+   
     status |= PvAttrEnumGet      (this->PvHandle, "StatDriverType", buffer, sizeof(buffer), &nchars);
     if (status == ePvErrNotFound) {
         status = 0;
@@ -931,6 +950,10 @@ asynStatus prosilica::readStats()
     status |= setDoubleParam (PSFrameRate, fval);
     status |= PvAttrUint32Get    (this->PvHandle, "StreamBytesPerSecond", &uval);
     status |= setIntegerParam(PSByteRate, (int)uval);
+    status |= PvAttrUint32Get    (this->PvHandle, "GvspLookbackWindow", &uval);
+    status |= setIntegerParam(PSResendLookback, (int)uval);
+    status |= PvAttrUint32Get    (this->PvHandle, "GvspRetries", &uval);
+    status |= setIntegerParam(PSResendRetries, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "PacketSize", &uval);
     status |= setIntegerParam(PSPacketSize, (int)uval);
     status |= PvAttrUint32Get    (this->PvHandle, "StatFramesCompleted", &uval);
@@ -1513,6 +1536,10 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
     } else if (function == PSByteRate) {
             status |= PvAttrUint32Set(this->PvHandle, "StreamBytesPerSecond", value);
+    } else if (function == PSResendLookback) {
+            status |= PvAttrUint32Set(this->PvHandle, "GvspLookbackWindow", value);
+    } else if (function == PSResendRetries) {
+            status |= PvAttrUint32Set(this->PvHandle, "GvspRetries", value);
     } else if (function == PSReadStatistics) {
             readStats();
     } else if (function == PSTriggerEvent) {
@@ -1560,7 +1587,7 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
             /* If this is not a parameter we have handled call the base class */
             if (function < FIRST_PS_PARAM) status = ADDriver::writeInt32(pasynUser, value);
     }
-    
+ 
     /* Read the camera parameters and do callbacks */
     status |= readParameters();    
     if (status) 
@@ -1697,9 +1724,9 @@ extern "C" int prosilicaConfig(char *portName, /* Port name */
   * \param[in] portName The name of the asyn port driver to be created.
   * \param[in] cameraId The uniqueId, IP address or IP DNS name  of the camera to be connected to this driver.
   * \param[in] maxBuffers The maximum number of NDArray buffers that the NDArrayPool for this driver is 
-  *            allowed to allocate. Set this to -1 to allow an unlimited number of buffers.
+  *            allowed to allocate. Set this to 0 to allow an unlimited number of buffers.
   * \param[in] maxMemory The maximum amount of memory that the NDArrayPool for this driver is 
-  *            allowed to allocate. Set this to -1 to allow an unlimited amount of memory.
+  *            allowed to allocate. Set this to 0 to allow an unlimited amount of memory.
   * \param[in] priority The thread priority for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
   * \param[in] stackSize The stack size for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
   * \param[in] maxPvAPIFrames The number of frame buffers to use in the PvAPI library driver. Default=MAX_PVAPI_FRAMES=2.
@@ -1735,6 +1762,8 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     createParam(PSResetTimerString,        asynParamInt32,    &PSResetTimer);
     createParam(PSFrameRateString,         asynParamFloat64,  &PSFrameRate);
     createParam(PSByteRateString,          asynParamInt32,    &PSByteRate);
+    createParam(PSResendLookbackString,    asynParamInt32,    &PSResendLookback);
+    createParam(PSResendRetriesString,     asynParamInt32,    &PSResendRetries);
     createParam(PSPacketSizeString,        asynParamInt32,    &PSPacketSize);
     createParam(PSFramesCompletedString,   asynParamInt32,    &PSFramesCompleted);
     createParam(PSFramesDroppedString,     asynParamInt32,    &PSFramesDropped);
