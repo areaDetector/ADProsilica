@@ -212,6 +212,52 @@ record(longin, "$(P)$(R)PSByteRate_RBV")
    field(SCAN, "I/O Intr")
 }
 
+record( longout, "$(P)$(R)PSResendLookback" )
+{
+	field( PINI, "YES" )
+	field( DTYP, "asynInt32" )
+	field( OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))PS_RESEND_LOOKBACK" )
+	field( VAL,  "25" )
+}
+
+record( longin, "$(P)$(R)PSResendLookback_RBV" )
+{
+   field( DTYP, "asynInt32" )
+   field( INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))PS_RESEND_LOOKBACK" )
+   field( SCAN, "I/O Intr" )
+# limits ?
+#   field( LOW,  "114999000" )
+#   field( LOLO, "114000000" )
+#   field( HIGH, "115001000" )
+#   field( HIHI, "116000000" )
+#   field( LSV,  "MINOR" )
+#   field( LLSV, "MAJOR" )
+#   field( HSV,  "MINOR" )
+#   field( HHSV, "MAJOR" )
+}
+
+record( longout, "$(P)$(R)PSResendRetries" )
+{
+	field( PINI, "YES" )
+	field( DTYP, "asynInt32" )
+	field( OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))PS_RESEND_RETRIES" )
+	field( VAL,  "1" )
+}
+
+record( longin, "$(P)$(R)PSResendRetries_RBV" )
+{
+	field( DTYP, "asynInt32" )
+	field( INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))PS_RESEND_RETRIES" )
+	field( SCAN, "I/O Intr" )
+	field( LOW,  "0" )
+	field( HIGH, "4" )
+	field( HIHI, "5" )
+	field( LSV,  "MINOR" )
+	field( LLSV, "NO_ALARM" )
+	field( HSV,  "MINOR" )
+	field( HHSV, "MAJOR" )
+}
+
 record(longin, "$(P)$(R)PSPacketSize_RBV")
 {
    field(DTYP, "asynInt32")
@@ -226,11 +272,41 @@ record(longin, "$(P)$(R)PSFramesCompleted_RBV")
    field(SCAN, "I/O Intr")
 }
 
+record(calc, "$(P)$(R)PSFramesCompletedRate_RBV" )
+{
+    field(INPA, "$(P)$(R)PSFramesCompleted_RBV NPP NMS" ) # Current counter value
+    field(INPB, "$(P)$(R)PSFramesCompletedRate_RBV.LA NPP NMS" )   # Previous counter value
+    field(INPC, "$(P)$(R)PSFramesCompletedRate_RBV.VAL NPP NMS" )  # Previous rate
+    field(INPD, "0.5" ) # Smoothing factor
+    field(CALC, "(C*D)+MAX(0,A-B)*(1-D)" )
+    field(PREC, "2" )
+    field(EGU,  "Hz" )
+    field(SCAN, "1 second" )
+	field( LOW,  "0" )
+	field( LSV,  "MINOR" )
+}
+
 record(longin, "$(P)$(R)PSFramesDropped_RBV")
 {
    field(DTYP, "asynInt32")
    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_FRAMES_DROPPED")
    field(SCAN, "I/O Intr")
+}
+
+record(calc, "$(P)$(R)PSFramesDroppedRate_RBV" )
+{
+    field(INPA, "$(P)$(R)PSFramesDropped_RBV NPP NMS" ) # Current counter value
+    field(INPB, "$(P)$(R)PSFramesDroppedRate_RBV.LA NPP NMS" )   # Previous counter value
+    field(INPC, "$(P)$(R)PSFramesDroppedRate_RBV.VAL NPP NMS" )  # Previous rate
+    field(INPD, "0.5" ) # Smoothing factor
+    field(CALC, "(C*D)+MAX(0,A-B)*(1-D)" )
+    field(PREC, "2" )
+    field(EGU,  "Hz" )
+    field(SCAN, "1 second" )
+	field(HIGH, "1" )
+	field(HIHI, "5" )
+	field( HSV, "MINOR" )
+	field(HHSV, "MAJOR" )
 }
 
 record(longin, "$(P)$(R)PSPacketsErroneous_RBV")
@@ -240,11 +316,43 @@ record(longin, "$(P)$(R)PSPacketsErroneous_RBV")
    field(SCAN, "I/O Intr")
 }
 
+record(calc, "$(P)$(R)PSPacketsErroneousRate_RBV" )
+{
+    field(INPA, "$(P)$(R)PSPacketsErroneous_RBV NPP NMS" ) # Current counter value
+    field(INPB, "$(P)$(R)PSPacketsErroneousRate_RBV.LA NPP NMS" )   # Previous counter value
+    field(INPC, "$(P)$(R)PSPacketsErroneousRate_RBV.VAL NPP NMS" )  # Previous rate
+    field(INPD, "0.5" ) # Smoothing factor
+    field(CALC, "(C*D)+MAX(0,A-B)*(1-D)" )
+    field(PREC, "2" )
+    field(EGU,  "Hz" )
+    field(SCAN, "1 second" )
+	field(HIGH, "1" )
+	field(HIHI, "5" )
+	field( HSV, "MINOR" )
+	field(HHSV, "MAJOR" )
+}
+
 record(longin, "$(P)$(R)PSPacketsMissed_RBV")
 {
    field(DTYP, "asynInt32")
    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_PACKETS_MISSED")
    field(SCAN, "I/O Intr")
+}
+
+record(calc, "$(P)$(R)PSPacketsMissedRate_RBV" )
+{
+    field(INPA, "$(P)$(R)PSPacketsMissed_RBV NPP NMS" ) # Current counter value
+    field(INPB, "$(P)$(R)PSPacketsMissedRate_RBV.LA NPP NMS" )   # Previous counter value
+    field(INPC, "$(P)$(R)PSPacketsMissedRate_RBV.VAL NPP NMS" )  # Previous rate
+    field(INPD, "0.5" ) # Smoothing factor
+    field(CALC, "(C*D)+MAX(0,A-B)*(1-D)" )
+    field(PREC, "2" )
+    field(EGU,  "Hz" )
+    field(SCAN, "1 second" )
+	field(HIGH, "10" )
+	field(HIHI, "50" )
+	field( HSV, "MINOR" )
+	field(HHSV, "MAJOR" )
 }
 
 record(longin, "$(P)$(R)PSPacketsReceived_RBV")
@@ -254,11 +362,43 @@ record(longin, "$(P)$(R)PSPacketsReceived_RBV")
    field(SCAN, "I/O Intr")
 }
 
+record(calc, "$(P)$(R)PSPacketsReceivedRate_RBV" )
+{
+    field(INPA, "$(P)$(R)PSPacketsReceived_RBV NPP NMS" ) # Current counter value
+    field(INPB, "$(P)$(R)PSPacketsReceivedRate_RBV.LA NPP NMS" )   # Previous counter value
+    field(INPC, "$(P)$(R)PSPacketsReceivedRate_RBV.VAL NPP NMS" )  # Previous rate
+    field(INPD, "0.5" ) # Smoothing factor
+    field(CALC, "(C*D)+MAX(0,A-B)*(1-D)" )
+    field(PREC, "2" )
+    field(EGU,  "Hz" )
+    field(SCAN, "1 second" )
+	field(LOW,  "5000" )
+	field(LOLO, "0" )
+	field(LSV,  "MINOR" )
+	field(LLSV, "MAJOR" )
+}
+
 record(longin, "$(P)$(R)PSPacketsRequested_RBV")
 {
    field(DTYP, "asynInt32")
    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_PACKETS_REQUESTED")
    field(SCAN, "I/O Intr")
+}
+
+record(calc, "$(P)$(R)PSPacketsRequestedRate_RBV" )
+{
+    field(INPA, "$(P)$(R)PSPacketsRequested_RBV NPP NMS" ) # Current counter value
+    field(INPB, "$(P)$(R)PSPacketsRequestedRate_RBV.LA NPP NMS" )   # Previous counter value
+    field(INPC, "$(P)$(R)PSPacketsRequestedRate_RBV.VAL NPP NMS" )  # Previous rate
+    field(INPD, "0.5" ) # Smoothing factor
+    field(CALC, "(C*D)+MAX(0,A-B)*(1-D)" )
+    field(PREC, "2" )
+    field(EGU,  "Hz" )
+    field(SCAN, "1 second" )
+	field(HIGH, "5" )
+	field(HIHI, "10" )
+	field( HSV, "MINOR" )
+	field(HHSV, "MAJOR" )
 }
 
 record(longin, "$(P)$(R)PSPacketsResent_RBV")
@@ -268,11 +408,43 @@ record(longin, "$(P)$(R)PSPacketsResent_RBV")
    field(SCAN, "I/O Intr")
 }
 
+record(calc, "$(P)$(R)PSPacketsResentRate_RBV" )
+{
+    field(INPA, "$(P)$(R)PSPacketsResent_RBV NPP NMS" ) # Current counter value
+    field(INPB, "$(P)$(R)PSPacketsResentRate_RBV.LA NPP NMS" )   # Previous counter value
+    field(INPC, "$(P)$(R)PSPacketsResentRate_RBV.VAL NPP NMS" )  # Previous rate
+    field(INPD, "0.5" ) # Smoothing factor
+    field(CALC, "(C*D)+MAX(0,A-B)*(1-D)" )
+    field(PREC, "2" )
+    field(EGU,  "Hz" )
+    field(SCAN, "1 second" )
+	field(HIGH, "5" )
+	field(HIHI, "10" )
+	field( HSV, "MINOR" )
+	field(HHSV, "MAJOR" )
+}
+
 record(longin, "$(P)$(R)PSBadFrameCounter_RBV")
 {
    field(DTYP, "asynInt32")
    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_BAD_FRAME_COUNTER")
    field(SCAN, "I/O Intr")
+}
+
+record(calc, "$(P)$(R)PSBadFrameRate_RBV" )
+{
+    field(INPA, "$(P)$(R)PSBadFrameCounter_RBV NPP NMS" ) # Current counter value
+    field(INPB, "$(P)$(R)PSBadFrameRate_RBV.LA NPP NMS" )   # Previous counter value
+    field(INPC, "$(P)$(R)PSBadFrameRate_RBV.VAL NPP NMS" )  # Previous rate
+    field(INPD, "0.5" ) # Smoothing factor
+    field(CALC, "(C*D)+MAX(0,A-B)*(1-D)" )
+    field(PREC, "2" )
+    field(EGU,  "Hz" )
+    field(SCAN, "1 second" )
+	field(HIGH, "1" )
+	field(HIHI, "5" )
+	field( HSV, "MINOR" )
+	field(HHSV, "MAJOR" )
 }
 
 ###############################################################################
