@@ -1,3 +1,4 @@
+file "ADBase_settings.req", P=$(P), R=$(R)
 $(P)$(R)BayerConvert
 $(P)$(R)PSReadStatistics.SCAN
 $(P)$(R)PSByteRate
