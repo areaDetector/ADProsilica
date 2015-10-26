@@ -18,3 +18,4 @@ $(P)$(R)Strobe1Duration
 $(P)$(R)TriggerEvent
 $(P)$(R)TriggerOverlap
 $(P)$(R)TriggerDelay
+$(P)$(R)PSTimestampType
