@@ -1455,7 +1455,6 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
     status |= setIntegerParam(function, value);
 
     if ((function == ADBinX) ||
-        (function == ADBinX) ||
         (function == ADBinY) ||
         (function == ADMinX) ||
         (function == ADSizeX) ||
