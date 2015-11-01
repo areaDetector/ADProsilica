@@ -839,12 +839,7 @@ asynStatus prosilica::setGeometry()
     status |= getIntegerParam(ADSizeY, &sizeY);
     status |= getIntegerParam(ADMaxSizeX, &maxSizeX);
     status |= getIntegerParam(ADMaxSizeY, &maxSizeY);
-    
-    /* CMOS cameras don't support binning, so ignore ePvErrNotFound errors */
-    s = PvAttrUint32Set(this->PvHandle, "BinningX", binX);
-    if (s != ePvErrNotFound) status |= s;
-    s = PvAttrUint32Set(this->PvHandle, "BinningY", binY);
-    if (s != ePvErrNotFound) status |= s;
+
     if (minX + sizeX > maxSizeX) {
         sizeX = maxSizeX - minX;
         setIntegerParam(ADSizeX, sizeX);
@@ -853,10 +848,19 @@ asynStatus prosilica::setGeometry()
         sizeY = maxSizeY - minY;
         setIntegerParam(ADSizeY, sizeY);
     }
-    status |= PvAttrUint32Set(this->PvHandle, "RegionX", minX/binX);
-    status |= PvAttrUint32Set(this->PvHandle, "RegionY", minY/binY);
-    status |= PvAttrUint32Set(this->PvHandle, "Width",   sizeX/binX);
-    status |= PvAttrUint32Set(this->PvHandle, "Height",  sizeY/binY);
+    
+    /* CMOS cameras don't support binning, so ignore ePvErrNotFound errors */
+    s = PvAttrUint32Set(this->PvHandle, "BinningX", binX);
+    if (s != ePvErrNotFound) status |= s;
+    s = PvAttrUint32Set(this->PvHandle, "BinningY", binY);
+    if (s != ePvErrNotFound) status |= s;
+
+    if(!status){
+      status |= PvAttrUint32Set(this->PvHandle, "RegionX", minX/binX);
+      status |= PvAttrUint32Set(this->PvHandle, "RegionY", minY/binY);
+      status |= PvAttrUint32Set(this->PvHandle, "Width",   sizeX/binX);
+      status |= PvAttrUint32Set(this->PvHandle, "Height",  sizeY/binY);
+    }
     
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
                       "%s:%s: error, status=%d\n", 
