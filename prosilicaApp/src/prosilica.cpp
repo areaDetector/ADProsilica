@@ -744,9 +744,8 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 break;
 
             case PSTimestampTypeIOC: {
-                    timespec ts;
-                    epicsTimeToTimespec(&ts, &pImage->epicsTS);
-                    pImage->timeStamp = (double)ts.tv_sec + ((double)ts.tv_nsec * 1.0e-9);
+                    pImage->timeStamp = (double)pImage->epicsTS.secPastEpoch 
+                      + ((double)pImage->epicsTS.nsec * 1.0e-9);
                 }
                 break;
 
