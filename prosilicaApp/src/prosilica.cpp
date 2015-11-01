@@ -1422,6 +1422,10 @@ asynStatus prosilica::connectCamera()
      * With CMOS cameras if the camera is already acquiring when we connect there will be problems,
      * and this can happen if the camera was acquiring when the IOC previously exited. */
     PvCommandRun(this->PvHandle, "AcquisitionAbort");
+
+    /* Now sync the timer on the camera with the IOC */
+
+    this->syncTimer();
         
     /* We found the camera and everything is OK.  Signal to asynManager that we are connected. */
     status = pasynManager->exceptionConnect(this->pasynUserSelf);
