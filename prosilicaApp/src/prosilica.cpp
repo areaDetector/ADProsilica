@@ -692,10 +692,21 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         pImage->pAttributeList->add("BayerPattern", "Bayer Pattern", NDAttrInt32, &bayerPattern);
         pImage->pAttributeList->add("ColorMode", "Color Mode", NDAttrInt32, &colorMode);
         
-        /* Set the uniqueId and time stamp */
+        /* Set the uniqueId */
         pImage->uniqueId = pFrame->FrameCount;
-        updateTimeStamp(&pImage->epicsTS);
+
+        /* Set the EPICS time stamp based on the frame time */
         const double native_frame_ticks =  ((double)pFrame->TimestampLo + (double)pFrame->TimestampHi*4294967296.);
+        epicsTimeStamp epics_frame_time = lastSyncTime;
+        if ( (( 0 == epics_frame_time.secPastEpoch ) && ( 0 == epics_frame_time.nsec )) || (0 == this->timeStampFrequency) ) {
+
+            updateTimeStamp( &epics_frame_time );
+        }
+        else {
+
+            epicsTimeAddSeconds ( &epics_frame_time, native_frame_ticks/this->timeStampFrequency );
+        }
+        pImage->epicsTS = epics_frame_time;
 
         /* Determine how to set the timeStamp */
         PSTimestampType_t timestamp_type = PSTimestampTypeNativeTicks;
@@ -713,8 +724,6 @@ void prosilica::frameCallback(tPvFrame *pFrame)
 
             case PSTimestampTypePOSIX: {
                     if (this->timeStampFrequency == 0) this->timeStampFrequency = 1;
-                    epicsTimeStamp epics_frame_time = lastSyncTime;
-                    epicsTimeAddSeconds(&epics_frame_time, native_frame_ticks/this->timeStampFrequency);
                     timespec ts;
                     epicsTimeToTimespec(&ts, &epics_frame_time);
                     pImage->timeStamp = (double)ts.tv_sec + ((double)ts.tv_nsec * 1.0e-09);
@@ -722,9 +731,6 @@ void prosilica::frameCallback(tPvFrame *pFrame)
                 break;
 
             case PSTimestampTypeEPICS: {
-                    if (this->timeStampFrequency == 0) this->timeStampFrequency = 1;
-                    epicsTimeStamp epics_frame_time = lastSyncTime;
-                    epicsTimeAddSeconds(&epics_frame_time, native_frame_ticks/this->timeStampFrequency);
                     pImage->timeStamp = (double)epics_frame_time.secPastEpoch + ((double)epics_frame_time.nsec * 1.0e-09);
                 }
                 break;
@@ -774,10 +780,13 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         dims[0] = this->sensorWidth;
         dims[1] = this->sensorHeight;
         pImage = this->pNDArrayPool->alloc(ndims, dims, NDInt8, this->maxFrameSize, NULL);
-        /* Put the pointer to this image buffer in the frame context[1] */
-        pFrame->Context[1] = pImage;
-        /* Reset the frame buffer data pointer be this image buffer data pointer */
-        pFrame->ImageBuffer = pImage->pData;
+
+        if ( NULL != pImage ) {
+            /* Put the pointer to this image buffer in the frame context[1] */
+            pFrame->Context[1] = pImage;
+            /* Reset the frame buffer data pointer be this image buffer data pointer */
+            pFrame->ImageBuffer = pImage->pData;
+		}
     } else {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, 
             "%s:%s: ERROR, frame has error code %d\n",
@@ -791,7 +800,16 @@ void prosilica::frameCallback(tPvFrame *pFrame)
     callParamCallbacks();
     
     /* Queue this frame to run again */
-    PvCaptureQueueFrame(this->PvHandle, pFrame, frameCallbackC); 
+    if ( NULL != pFrame->Context[1] ) {
+        tPvErr error = PvCaptureQueueFrame(this->PvHandle, pFrame, frameCallbackC);
+        if ( ePvErrSuccess != error ) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:%s: ERROR, Unable to requeue frame: Code %d.\n", driverName, functionName, error );
+        }
+    }
+    else {
+
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:%s: ERROR, Frame dropped due to missing NDArray buffer.\n", driverName, functionName );
+    }
     this->unlock();
 }
 
@@ -1770,6 +1788,7 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
 
     /* Set default value of maxPvAPIFrames_ if it is zero */
     if (maxPvAPIFrames_ == 0) maxPvAPIFrames_ = MAX_PVAPI_FRAMES;
+    if (maxPvAPIFrames_ > maxBuffers) maxPvAPIFrames_ = maxBuffers;
     /* Create the PvFrames buffer.  Note that these structures must be set to 0! */
     PvFrames = (tPvFrame *)calloc(maxPvAPIFrames_, sizeof(tPvFrame));
     
