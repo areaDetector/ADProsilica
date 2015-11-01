@@ -47,6 +47,9 @@ static ELLLIST *cameraList;
 #define MAX_PVAPI_FRAMES  2  /**< Number of frame buffers for PvApi */
 #define MAX_PACKET_SIZE 8228
 
+#define CONNECT_RETRY_COUNT    30 /* Number of times to retry connecting */
+#define CONNECT_RETRY_INTERVAL  1 /* Time to sleep between trying to connect */
+
 /** Driver for Prosilica GigE and CameraLink cameras using their PvApi library */
 class prosilica : public ADDriver {
 public:
@@ -1312,9 +1315,10 @@ asynStatus prosilica::connectCamera()
         asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, 
               "%s:%s: No RW access for camera %lu, retrying ...\n", 
               driverName, functionName, this->uniqueId);
-
+        
         // Wait a second and fetch status again
-        epicsThreadSleep(1);
+        epicsThreadSleep(CONNECT_RETRY_INTERVAL);
+
         status = PvCameraInfoEx(this->uniqueId, &this->PvCameraInfo, sizeof(this->PvCameraInfo));
         if (status) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
@@ -1322,9 +1326,11 @@ asynStatus prosilica::connectCamera()
                   driverName, functionName, this->uniqueId);
             return asynError;
         }
-        if ( ++retryCount >= 10 )
+        if ( ++retryCount >= CONNECT_RETRY_COUNT ) {
             break;
+        }
     }
+
     if ((this->PvCameraInfo.PermittedAccess & ePvAccessMaster) == 0) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
               "%s:%s: Cannot get control of camera %lu, access flags=%lx\n", 
@@ -1443,7 +1449,11 @@ asynStatus prosilica::connectCamera()
      * With CMOS cameras if the camera is already acquiring when we connect there will be problems,
      * and this can happen if the camera was acquiring when the IOC previously exited. */
     PvCommandRun(this->PvHandle, "AcquisitionAbort");
-        
+    
+    /* Now sync the timer of the camera and the IOC */
+
+    this->syncTimer();
+
     /* We found the camera and everything is OK.  Signal to asynManager that we are connected. */
     status = pasynManager->exceptionConnect(this->pasynUserSelf);
     if (status) {
