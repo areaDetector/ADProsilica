@@ -164,12 +164,17 @@ typedef enum {
 
 /* These describe the contents of the NDArray timeStamp parameter */
 typedef enum {
-    PSTimestampTypeNativeTicks,   // The number of internal camera clock ticks which have elapsed since the last timer reset
-    PSTimestampTypeNativeSeconds, // The number of seconds which have elapsed since the last timer reset
-    PSTimestampTypePOSIX,         // IntegerPart(timeStamp) is the number of seconds since the POSIX Epoch (00:00:00 UTC, January 1, 1970)
-                                  // DecimalPart(timestamp) is the fraction of the second afterward
-    PSTimestampTypeEPICS          // IntegerPart(timeStamp) is the number of seconds since the EPICS Epoch (January 1, 1990)
-                                  // DecimalPart(timestamp) is the fraction of the second afterward
+    PSTimestampTypeNativeTicks,
+    // The number of internal camera clock ticks which have elapsed 
+    // since the last timer reset
+    PSTimestampTypeNativeSeconds, 
+    // The number of seconds which have elapsed since the last timer reset
+    PSTimestampTypePOSIX,         
+    // The number of seconds since the POSIX Epoch (00:00:00 UTC, January 1, 1970)
+    PSTimestampTypeEPICS,         
+    // The number of seconds since the EPICS Epoch (January 1, 1990)
+    PSTimestampTypeIOC
+    // Use the IOC clock to sync timeStamp and driver timestamps
 } PSTimestampType_t;
 
 
@@ -468,8 +473,16 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* Convert from the PvApi data types to ADDataType */
         /* The pFrame structure does not contain the binning, get that from param lib,
          * but it could be wrong for this frame if recently changed */
+
+        /* First lets set the timestamp so it is as close to acquisition as 
+         * possible and set the unique id from the framecounter */
+
+        pImage->uniqueId = pFrame->FrameCount;
+        updateTimeStamp(&pImage->epicsTS);
+
         getIntegerParam(ADBinX, &binX);
         getIntegerParam(ADBinY, &binY);
+
         /* The mono cameras can return a Bayer pattern which is invalid, and this can
          * crash the file plugin.  Fix it here. */
         if (pFrame->BayerPattern > ePvBayerBGGR) pFrame->BayerPattern = ePvBayerRGGB;
@@ -692,9 +705,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         pImage->pAttributeList->add("BayerPattern", "Bayer Pattern", NDAttrInt32, &bayerPattern);
         pImage->pAttributeList->add("ColorMode", "Color Mode", NDAttrInt32, &colorMode);
         
-        /* Set the uniqueId and time stamp */
-        pImage->uniqueId = pFrame->FrameCount;
-        updateTimeStamp(&pImage->epicsTS);
+        /* Now set timeStamp field in pImage */
         const double native_frame_ticks =  ((double)pFrame->TimestampLo + (double)pFrame->TimestampHi*4294967296.);
 
         /* Determine how to set the timeStamp */
@@ -714,18 +725,28 @@ void prosilica::frameCallback(tPvFrame *pFrame)
             case PSTimestampTypePOSIX: {
                     if (this->timeStampFrequency == 0) this->timeStampFrequency = 1;
                     epicsTimeStamp epics_frame_time = lastSyncTime;
-                    epicsTimeAddSeconds(&epics_frame_time, native_frame_ticks/this->timeStampFrequency);
+                    epicsTimeAddSeconds(&epics_frame_time, 
+                        native_frame_ticks/this->timeStampFrequency);
                     timespec ts;
                     epicsTimeToTimespec(&ts, &epics_frame_time);
-                    pImage->timeStamp = (double)ts.tv_sec + ((double)ts.tv_nsec * 1.0e-09);
+                    pImage->timeStamp = (double)ts.tv_sec + ((double)ts.tv_nsec * 1.0e-9);
                 }
                 break;
 
             case PSTimestampTypeEPICS: {
                     if (this->timeStampFrequency == 0) this->timeStampFrequency = 1;
                     epicsTimeStamp epics_frame_time = lastSyncTime;
-                    epicsTimeAddSeconds(&epics_frame_time, native_frame_ticks/this->timeStampFrequency);
-                    pImage->timeStamp = (double)epics_frame_time.secPastEpoch + ((double)epics_frame_time.nsec * 1.0e-09);
+                    epicsTimeAddSeconds(&epics_frame_time, 
+                        native_frame_ticks/this->timeStampFrequency);
+                    pImage->timeStamp = (double)epics_frame_time.secPastEpoch + 
+                      ((double)epics_frame_time.nsec * 1.0e-09);
+                }
+                break;
+
+            case PSTimestampTypeIOC: {
+                    timespec ts;
+                    epicsTimeToTimespec(&ts, &pImage->epicsTS);
+                    pImage->timeStamp = (double)ts.tv_sec + ((double)ts.tv_nsec * 1.0e-9);
                 }
                 break;
 
