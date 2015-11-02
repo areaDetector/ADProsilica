@@ -1328,6 +1328,27 @@ asynStatus prosilica::connectCamera()
         this->uniqueId = this->PvCameraInfo.UniqueId;
     }
 
+    // Here's where reconnect fails.
+    // PermittedAccess flags are 0x0002 for around 5 seconds after
+    // a hard IOC restart which didn't call disconnectCamera()
+    unsigned retryCount = 0;
+    while ( (this->PvCameraInfo.PermittedAccess & ePvAccessMaster) == 0 ) {
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, 
+              "%s:%s: No RW access for camera %lu, retrying ...\n", 
+              driverName, functionName, this->uniqueId);
+
+        // Wait a second and fetch status again
+        epicsThreadSleep(1);
+        status = PvCameraInfoEx(this->uniqueId, &this->PvCameraInfo, sizeof(this->PvCameraInfo));
+        if (status) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+                  "%s:%s: Cannot read status for camera %lu\n", 
+                  driverName, functionName, this->uniqueId);
+            return asynError;
+        }
+        if ( ++retryCount >= 10 )
+            break;
+    }
     if ((this->PvCameraInfo.PermittedAccess & ePvAccessMaster) == 0) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
               "%s:%s: Cannot get control of camera %lu, access flags=%lx\n", 
@@ -1347,7 +1368,7 @@ asynStatus prosilica::connectCamera()
         this->PvHandle = NULL;
         return asynError;
     }
-    
+ 
     /* Negotiate maximum frame size */
     status = PvCaptureAdjustPacketSize(this->PvHandle, MAX_PACKET_SIZE);
     if (status) {
@@ -1824,22 +1845,24 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
 
         PvApiInitialized = 1;
     }
-    
-    /* Need to wait a short while for the PvAPI library to find the cameras (0.2 seconds is not long enough in 1.24) */
+
+    /* Need to wait a short while for the PvAPI library to find the cameras */
+    /* (0.2 seconds is not long enough in 1.24) */
     epicsThreadSleep(1.0);
-    
-    /* Try to connect to the camera.  
-     * It is not a fatal error if we cannot now, the camera may be off or owned by
-     * someone else.  It may connect later. */
-    this->lock();
-    status = connectCamera();
-    this->unlock();
-    if (status) {
-        printf("%s:%s: cannot connect to camera %s, manually connect when available.\n", 
-               driverName, functionName, cameraId);
-        return;
+ 
+    if ( this->PvHandle == NULL ) {
+        /* Try to connect to the camera.  
+         * It is not a fatal error if we cannot now, the camera may be off or owned by
+         * someone else.  It may connect later. */
+        this->lock();
+        status = connectCamera();
+        this->unlock();
+        if (status) {
+            printf("%s:%s: cannot connect to camera %s, manually connect when available.\n", 
+                   driverName, functionName, cameraId);
+        }
     }
-    
+ 
     /* Register the shutdown function for epicsAtExit */
     epicsAtExit(shutdown, (void*)this);
 }
