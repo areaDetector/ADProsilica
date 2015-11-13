@@ -916,13 +916,6 @@ asynStatus prosilica::getGeometry()
     status |= setIntegerParam(ADMinY,  minY*binY);
     status |= setIntegerParam(ADSizeX, sizeX*binX);
     status |= setIntegerParam(ADSizeY, sizeY*binY);
-
-    status |= setIntegerParam(ADBinX,  binX);
-    status |= setIntegerParam(ADBinY,  binY);
-    status |= setIntegerParam(ADMinX,  minX*binX);
-    status |= setIntegerParam(ADMinY,  minY*binY);
-    status |= setIntegerParam(ADSizeX, sizeX*binX);
-    status |= setIntegerParam(ADSizeY, sizeY*binY);
     status |= setIntegerParam(NDArraySizeX, sizeX);
     status |= setIntegerParam(NDArraySizeY, sizeY);
     
