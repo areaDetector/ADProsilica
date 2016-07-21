@@ -114,13 +114,17 @@ protected:
     int PSStrobe1Delay;
     int PSStrobe1CtlDuration;
     int PSStrobe1Duration;
-    #define LAST_PS_PARAM PSStrobe1Duration
+    int PSReadTemp;
+    int PSMainboardTemp;
+    int PSCCDTempOK;
+    #define LAST_PS_PARAM PSCCDTempOK
 private:                                        
     /* These are the methods that are new to this class */
     asynStatus setPixelFormat();
     asynStatus setGeometry();
     asynStatus getGeometry();
     asynStatus readStats();
+    asynStatus readTemp();
     asynStatus readParameters();
     asynStatus disconnectCamera();
     asynStatus connectCamera();
@@ -288,6 +292,9 @@ static const char *PSStrobeModes[] = {
 #define PSStrobe1DelayString         "PS_STROBE_1_DELAY"       /* (asynFloat64,  r/w) Strobe 1 delay */
 #define PSStrobe1CtlDurationString   "PS_STROBE_1_CTL_DURATION"/* (asynInt32,    r/w) Strobe 1 controlled duration */
 #define PSStrobe1DurationString      "PS_STROBE_1_DURATION"    /* (asynFloat64,  r/w) Strobe 1 duration */
+#define PSReadTempString             "PS_READ_TEMP"            /* (asynInt32,    r/w) Write to read temperature */
+#define PSMainboardTempString        "PS_MAINBOARD_TEMP"       /* (asynFloat64,  r/w) Mainboard temperature */
+#define PSCCDTempOKString            "PS_CCD_TEMP_OK"       /* (asynFloat64,  r/w) Mainboard temperature */
 
 void prosilica::shutdown (void* arg) {
 
@@ -1105,6 +1112,40 @@ asynStatus prosilica::readStats()
     return(asynSuccess);
 }
 
+asynStatus prosilica::readTemp()
+{
+    int status = asynSuccess;
+    tPvFloat32 fval;
+    tPvUint32 uval;
+    tPvErr err;
+    static const char *functionName = "readTemp";
+
+    err = PvAttrIsAvailable(this->PvHandle, "DeviceTemperatureSensor");
+    if(!err){
+        status |= PvAttrFloat32Get(this->PvHandle, "DeviceTemperatureSensor", &fval);
+        status |= setDoubleParam(ADTemperatureActual, fval);
+    }
+    
+    err = PvAttrIsAvailable(this->PvHandle, "DeviceTemperatureMainboard");
+    if(!err){
+        status |= PvAttrFloat32Get(this->PvHandle, "DeviceTemperatureMainboard", &fval);
+        status |= setDoubleParam(PSMainboardTemp, fval);
+    }
+
+    err = PvAttrIsAvailable(this->PvHandle, "CCDTemperatureOK");
+    if(!err){
+        status |= PvAttrUint32Get(this->PvHandle, "CCDTemperatureOK", &uval);
+        status |= setIntegerParam(PSCCDTempOK, uval);
+    }
+
+    if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
+                      "%s:%s: error, status=%d\n", 
+                      driverName, functionName, status);
+    
+    return asynSuccess;
+}
+
+
 asynStatus prosilica::readParameters()
 {
     int status = asynSuccess;
@@ -1461,6 +1502,10 @@ asynStatus prosilica::connectCamera()
     /* Read the current camera statistics */
     status = readStats();
     if (status) return((asynStatus)status);
+    
+    /* Read the current camera temperatures */
+    status = readTemp();
+    if (status) return((asynStatus)status);
 
     /* Force acquisition to stop.  
      * With CMOS cameras if the camera is already acquiring when we connect there will be problems,
@@ -1562,6 +1607,8 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
             status |= PvAttrUint32Set(this->PvHandle, "StreamBytesPerSecond", value);
     } else if (function == PSReadStatistics) {
             readStats();
+    } else if (function == PSReadTemp) {
+            readTemp();
     } else if (function == PSTriggerEvent) {
             status |= PvAttrEnumSet(this->PvHandle, "FrameStartTriggerEvent", PSTriggerEventModes[value]);
     } else if (function == PSTriggerOverlap) {
@@ -1810,6 +1857,9 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     createParam(PSStrobe1DelayString,      asynParamFloat64,  &PSStrobe1Delay);
     createParam(PSStrobe1CtlDurationString,asynParamInt32,    &PSStrobe1CtlDuration);
     createParam(PSStrobe1DurationString,   asynParamFloat64,  &PSStrobe1Duration);
+    createParam(PSReadTempString,          asynParamInt32,    &PSReadTemp);
+    createParam(PSMainboardTempString,     asynParamFloat64,  &PSMainboardTemp);
+    createParam(PSCCDTempOKString,         asynParamInt32,   &PSCCDTempOK);
 
     /* There is a conflict with readline use of signals, don't use readline signal handlers */
 #ifdef linux
