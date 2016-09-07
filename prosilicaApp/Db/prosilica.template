@@ -168,6 +168,66 @@ record(mbbi, "$(P)$(R)BayerConvert_RBV")
 }
 
 ###############################################################################
+#  These records are for gain mode control                                    #
+###############################################################################
+record(mbbo, "$(P)$(R)GainMode")
+{
+   field(DTYP, "asynInt32")
+   field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_GAIN_MODE")
+   field(ZRST, "Manual")
+   field(ZRVL, "0")
+   field(ONST, "AutoOnce")
+   field(ONVL, "1")
+   field(TWST, "Auto")
+   field(TWVL, "2")
+}
+
+record(mbbi, "$(P)$(R)GainMode_RBV")
+{
+   field(DTYP, "asynInt32")
+   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_GAIN_MODE")
+   field(ZRST, "Manual")
+   field(ZRVL, "0")
+   field(ONST, "AutoOnce")
+   field(ONVL, "1")
+   field(TWST, "Auto")
+   field(TWVL, "2")
+   field(SCAN, "I/O Intr")
+}
+
+###############################################################################
+#  These records are for exposure mode control                                #
+###############################################################################
+record(mbbo, "$(P)$(R)ExposureMode")
+{
+   field(DTYP, "asynInt32")
+   field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_EXPOSURE_MODE")
+   field(ZRST, "Manual")
+   field(ZRVL, "0")
+   field(ONST, "AutoOnce")
+   field(ONVL, "1")
+   field(TWST, "Auto")
+   field(TWVL, "2")
+   field(THST, "External")
+   field(THVL, "3")
+}
+
+record(mbbi, "$(P)$(R)ExposureMode_RBV")
+{
+   field(DTYP, "asynInt32")
+   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_EXPOSURE_MODE")
+   field(ZRST, "Manual")
+   field(ZRVL, "0")
+   field(ONST, "AutoOnce")
+   field(ONVL, "1")
+   field(TWST, "Auto")
+   field(TWVL, "2")
+   field(THST, "External")
+   field(THVL, "3")
+   field(SCAN, "I/O Intr")
+}
+
+###############################################################################
 #  These records are for network and frame statistics                         #
 ###############################################################################
 record(longout, "$(P)$(R)PSReadStatistics")

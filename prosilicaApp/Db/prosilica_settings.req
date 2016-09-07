@@ -1,5 +1,7 @@
 file "ADBase_settings.req", P=$(P), R=$(R)
 $(P)$(R)BayerConvert
+$(P)$(R)GainMode
+$(P)$(R)ExposureMode
 $(P)$(R)PSReadStatistics.SCAN
 $(P)$(R)PSByteRate
 $(P)$(R)SyncOut1Mode
