@@ -23,6 +23,10 @@ files respectively, in the configure/ directory of the appropriate release of th
 Release Notes
 =============
 
+R2-2 (XXX-November-2015)
+----
+* Added PSTimestampType to prosilica_settings.req.  Thank to Stuart Wilkins for this fix.
+
 R2-1 (16-April-2015)
 ----
 * Fixed bug in asynPrintIO call in frameCallback. It was printing data on previous frame, 
