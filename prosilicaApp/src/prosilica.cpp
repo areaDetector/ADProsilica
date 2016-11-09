@@ -1442,6 +1442,7 @@ asynStatus prosilica::connectCamera()
     /* Set some initial values for other parameters */
     status =  setStringParam (ADManufacturer, "Prosilica");
     status |= setStringParam (ADModel, this->PvCameraInfo.ModelName);
+    status |= setStringParam (ADSerialNumber, this->PvCameraInfo.SerialNumber);
     status |= setIntegerParam(ADSizeX, this->sensorWidth);
     status |= setIntegerParam(ADSizeY, this->sensorHeight);
     status |= setIntegerParam(ADMaxSizeX, this->sensorWidth);
