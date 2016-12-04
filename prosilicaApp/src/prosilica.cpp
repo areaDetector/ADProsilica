@@ -38,6 +38,10 @@
 
 #include <epicsExport.h>
 
+#define DRIVER_VERSION      2
+#define DRIVER_REVISION     2
+#define DRIVER_MODIFICATION 0
+
 static const char *driverName = "prosilica";
 
 static int PvApiInitialized;
@@ -1274,6 +1278,8 @@ asynStatus prosilica::connectCamera()
     int bytesPerPixel;
     NDArray *pImage;
     struct in_addr ipAddr;
+    unsigned long versionMajor, versionMinor;
+    char versionString[20];
     bool isUniqueId;
     static const char *functionName = "connectCamera";
 
@@ -1442,6 +1448,14 @@ asynStatus prosilica::connectCamera()
     /* Set some initial values for other parameters */
     status =  setStringParam (ADManufacturer, "Prosilica");
     status |= setStringParam (ADModel, this->PvCameraInfo.ModelName);
+    status |= setStringParam (ADSerialNumber, this->PvCameraInfo.SerialNumber);
+    status |= setStringParam (ADFirmwareVersion, this->PvCameraInfo.FirmwareVersion);
+    PvVersion(&versionMajor, &versionMinor);
+    epicsSnprintf(versionString, sizeof(versionString), "%ld.%ld", versionMajor, versionMinor);
+    status |= setStringParam (ADSDKVersion, versionString);
+    epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", 
+                  DRIVER_VERSION, DRIVER_REVISION, DRIVER_MODIFICATION);
+    setStringParam(NDDriverVersion, versionString);
     status |= setIntegerParam(ADSizeX, this->sensorWidth);
     status |= setIntegerParam(ADSizeY, this->sensorHeight);
     status |= setIntegerParam(ADMaxSizeX, this->sensorWidth);
