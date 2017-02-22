@@ -23,7 +23,7 @@ files respectively, in the configure/ directory of the appropriate release of th
 Release Notes
 =============
 
-R2-2 (XXX-December-2016)
+R2-2 (21-February-2017)
 ----
 * Added PSTimestampType to prosilica_settings.req.  Thank to Stuart Wilkins for this fix.
 * Added support for new parameters ADSerialNumber, ADFirmwareVersion, ADSDKVersion, NDDriverVersion 
