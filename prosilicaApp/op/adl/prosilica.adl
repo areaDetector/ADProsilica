@@ -1,7 +1,7 @@
 
 file {
-	name="/home/epics/devel/areaDetector-2-5/ADProsilica/prosilicaApp/op/adl/prosilica.adl"
-	version=030107
+	name="/home/epics/devel/areaDetector-3-1/ADProsilica/prosilicaApp/op/adl/prosilica.adl"
+	version=030109
 }
 display {
 	object {
@@ -125,7 +125,7 @@ composite {
 composite {
 	object {
 		x=383
-		y=676
+		y=710
 		width=298
 		height=20
 	}
@@ -134,7 +134,7 @@ composite {
 		"related display" {
 			object {
 				x=611
-				y=676
+				y=710
 				width=70
 				height=20
 			}
@@ -149,7 +149,7 @@ composite {
 		text {
 			object {
 				x=383
-				y=676
+				y=710
 				width=220
 				height=20
 			}
@@ -196,7 +196,7 @@ composite {
 		x=360
 		y=595
 		width=350
-		height=60
+		height=110
 	}
 	"composite name"=""
 	"composite file"="ADAttrFile.adl"
