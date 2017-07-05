@@ -31,10 +31,10 @@ epicsEnvSet("EPICS_DB_INCLUDE_PATH", "$(ADCORE)/db")
 # The simplest way to determine the uniqueId of a camera is to run the Prosilica GigEViewer application, 
 # select the camera, and press the "i" icon on the bottom of the main window to show the camera information for this camera. 
 # The Unique ID will be displayed on the first line in the information window.
-prosilicaConfig("$(PORT)", 51031, 50, 0, 0, 0, 10)
+#prosilicaConfig("$(PORT)", 51031, 50, 0, 0, 0, 10)
 #prosilicaConfig("$(PORT)", 50022, 50, 0)
 #prosilicaConfig("$(PORT)", 164.54.160.203, 50, 0)
-#prosilicaConfig("$(PORT)", 51039, 50, 0)
+prosilicaConfig("$(PORT)", 5000698, 50, 0)
 
 asynSetTraceIOMask("$(PORT)",0,2)
 #asynSetTraceMask("$(PORT)",0,255)
