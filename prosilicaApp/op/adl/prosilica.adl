@@ -1,6 +1,6 @@
 
 file {
-	name="/home/epics/devel/areaDetector-3-2/ADProsilica/prosilicaApp/op/adl/prosilica.adl"
+	name="/home/epics/devel/areaDetector-3-3-1/ADProsilica/prosilicaApp/op/adl/prosilica.adl"
 	version=030109
 }
 display {
@@ -8,7 +8,7 @@ display {
 		x=149
 		y=55
 		width=715
-		height=860
+		height=950
 	}
 	clr=14
 	bclr=4
@@ -111,34 +111,6 @@ text {
 	textix="Prosilica Camera - $(P)$(R)"
 	align="horiz. centered"
 }
-"related display" {
-	object {
-		x=611
-		y=710
-		width=70
-		height=20
-	}
-	display[0] {
-		label="I/O setup & statistics"
-		name="prosilicaMore.adl"
-		args="P=$(P),R=$(R)"
-	}
-	clr=14
-	bclr=51
-}
-text {
-	object {
-		x=383
-		y=710
-		width=220
-		height=20
-	}
-	"basic attribute" {
-		clr=14
-	}
-	textix="I/O setup & statistics"
-	align="horiz. right"
-}
 composite {
 	object {
 		x=5
@@ -169,16 +141,6 @@ composite {
 	"composite name"=""
 	"composite file"="ADShutter.adl"
 }
-composite {
-	object {
-		x=360
-		y=595
-		width=350
-		height=110
-	}
-	"composite name"=""
-	"composite file"="ADAttrFile.adl"
-}
 rectangle {
 	object {
 		x=487
@@ -195,7 +157,7 @@ rectangle {
 		x=360
 		y=205
 		width=350
-		height=385
+		height=460
 	}
 	"basic attribute" {
 		clr=14
@@ -456,178 +418,6 @@ menu {
 	limits {
 	}
 }
-text {
-	object {
-		x=383
-		y=488
-		width=140
-		height=20
-	}
-	"basic attribute" {
-		clr=14
-	}
-	textix="Time remaining"
-	align="horiz. right"
-}
-"text update" {
-	object {
-		x=530
-		y=489
-		width=67
-		height=18
-	}
-	monitor {
-		chan="$(P)$(R)TimeRemaining_RBV"
-		clr=54
-		bclr=4
-	}
-	limits {
-	}
-}
-text {
-	object {
-		x=383
-		y=463
-		width=140
-		height=20
-	}
-	"basic attribute" {
-		clr=14
-	}
-	textix="Detector state"
-	align="horiz. right"
-}
-"text update" {
-	object {
-		x=530
-		y=463
-		width=158
-		height=18
-	}
-	monitor {
-		chan="$(P)$(R)DetectorState_RBV"
-		clr=54
-		bclr=2
-	}
-	clrmod="alarm"
-	format="string"
-	limits {
-	}
-}
-"text entry" {
-	object {
-		x=530
-		y=513
-		width=60
-		height=20
-	}
-	control {
-		chan="$(P)$(R)ArrayCounter"
-		clr=14
-		bclr=51
-	}
-	limits {
-	}
-}
-"text update" {
-	object {
-		x=596
-		y=514
-		width=100
-		height=18
-	}
-	monitor {
-		chan="$(P)$(R)ArrayCounter_RBV"
-		clr=54
-		bclr=4
-	}
-	limits {
-	}
-}
-text {
-	object {
-		x=393
-		y=513
-		width=130
-		height=20
-	}
-	"basic attribute" {
-		clr=14
-	}
-	textix="Image counter"
-	align="horiz. right"
-}
-text {
-	object {
-		x=423
-		y=538
-		width=100
-		height=20
-	}
-	"basic attribute" {
-		clr=14
-	}
-	textix="Image rate"
-	align="horiz. right"
-}
-"text update" {
-	object {
-		x=530
-		y=539
-		width=100
-		height=18
-	}
-	monitor {
-		chan="$(P)$(R)ArrayRate_RBV"
-		clr=54
-		bclr=4
-	}
-	limits {
-	}
-}
-text {
-	object {
-		x=373
-		y=563
-		width=150
-		height=20
-	}
-	"basic attribute" {
-		clr=14
-	}
-	textix="Array callbacks"
-	align="horiz. right"
-}
-menu {
-	object {
-		x=530
-		y=563
-		width=90
-		height=20
-	}
-	control {
-		chan="$(P)$(R)ArrayCallbacks"
-		clr=14
-		bclr=51
-	}
-}
-"text update" {
-	object {
-		x=625
-		y=565
-		width=79
-		height=18
-	}
-	monitor {
-		chan="$(P)$(R)ArrayCallbacks_RBV"
-		clr=54
-		bclr=4
-	}
-	align="horiz. centered"
-	format="string"
-	limits {
-	}
-}
 "message button" {
 	object {
 		x=545
@@ -658,8 +448,8 @@ text {
 }
 text {
 	object {
-		x=453
-		y=438
+		x=460
+		y=435
 		width=70
 		height=20
 	}
@@ -671,8 +461,8 @@ text {
 }
 text {
 	object {
-		x=573
-		y=418
+		x=578
+		y=415
 		width=40
 		height=20
 	}
@@ -689,8 +479,8 @@ text {
 }
 text {
 	object {
-		x=544
-		y=418
+		x=549
+		y=415
 		width=100
 		height=20
 	}
@@ -707,8 +497,8 @@ text {
 }
 "message button" {
 	object {
-		x=530
-		y=438
+		x=535
+		y=435
 		width=59
 		height=20
 	}
@@ -722,8 +512,8 @@ text {
 }
 "message button" {
 	object {
-		x=597
-		y=438
+		x=602
+		y=435
 		width=59
 		height=20
 	}
@@ -1304,6 +1094,333 @@ menu {
 		clr=54
 		bclr=4
 	}
+	format="string"
+	limits {
+	}
+}
+composite {
+	object {
+		x=360
+		y=670
+		width=350
+		height=300
+	}
+	"composite name"=""
+	children {
+		composite {
+			object {
+				x=360
+				y=670
+				width=350
+				height=110
+			}
+			"composite name"=""
+			"composite file"="ADAttrFile.adl"
+		}
+		composite {
+			object {
+				x=382
+				y=950
+				width=298
+				height=20
+			}
+			"composite name"=""
+			children {
+				text {
+					object {
+						x=382
+						y=950
+						width=220
+						height=20
+					}
+					"basic attribute" {
+						clr=14
+					}
+					textix="I/O setup & statistics"
+					align="horiz. right"
+				}
+				"related display" {
+					object {
+						x=610
+						y=950
+						width=70
+						height=20
+					}
+					display[0] {
+						label="I/O setup & statistics"
+						name="prosilicaMore.adl"
+						args="P=$(P),R=$(R)"
+					}
+					clr=14
+					bclr=51
+				}
+			}
+		}
+		composite {
+			object {
+				x=360
+				y=785
+				width=350
+				height=160
+			}
+			"composite name"=""
+			"composite file"="ADBuffers.adl"
+		}
+	}
+}
+text {
+	object {
+		x=390
+		y=560
+		width=140
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Time remaining"
+	align="horiz. right"
+}
+"text update" {
+	object {
+		x=535
+		y=561
+		width=67
+		height=18
+	}
+	monitor {
+		chan="$(P)$(R)TimeRemaining_RBV"
+		clr=54
+		bclr=4
+	}
+	limits {
+	}
+}
+text {
+	object {
+		x=390
+		y=535
+		width=140
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Detector state"
+	align="horiz. right"
+}
+"text update" {
+	object {
+		x=532
+		y=535
+		width=158
+		height=18
+	}
+	monitor {
+		chan="$(P)$(R)DetectorState_RBV"
+		clr=54
+		bclr=2
+	}
+	clrmod="alarm"
+	format="string"
+	limits {
+	}
+}
+"text entry" {
+	object {
+		x=535
+		y=585
+		width=60
+		height=20
+	}
+	control {
+		chan="$(P)$(R)ArrayCounter"
+		clr=14
+		bclr=51
+	}
+	limits {
+	}
+}
+"text update" {
+	object {
+		x=601
+		y=586
+		width=100
+		height=18
+	}
+	monitor {
+		chan="$(P)$(R)ArrayCounter_RBV"
+		clr=54
+		bclr=4
+	}
+	limits {
+	}
+}
+text {
+	object {
+		x=400
+		y=585
+		width=130
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Image counter"
+	align="horiz. right"
+}
+text {
+	object {
+		x=430
+		y=610
+		width=100
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Image rate"
+	align="horiz. right"
+}
+"text update" {
+	object {
+		x=535
+		y=611
+		width=100
+		height=18
+	}
+	monitor {
+		chan="$(P)$(R)ArrayRate_RBV"
+		clr=54
+		bclr=4
+	}
+	limits {
+	}
+}
+text {
+	object {
+		x=380
+		y=635
+		width=150
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Array callbacks"
+	align="horiz. right"
+}
+menu {
+	object {
+		x=535
+		y=635
+		width=90
+		height=20
+	}
+	control {
+		chan="$(P)$(R)ArrayCallbacks"
+		clr=14
+		bclr=51
+	}
+}
+"text update" {
+	object {
+		x=630
+		y=637
+		width=79
+		height=18
+	}
+	monitor {
+		chan="$(P)$(R)ArrayCallbacks_RBV"
+		clr=54
+		bclr=4
+	}
+	align="horiz. centered"
+	format="string"
+	limits {
+	}
+}
+text {
+	object {
+		x=380
+		y=460
+		width=150
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="# Queued arrays"
+	align="horiz. right"
+}
+"text update" {
+	object {
+		x=535
+		y=461
+		width=60
+		height=18
+	}
+	monitor {
+		chan="$(P)$(R)NumQueuedArrays"
+		clr=54
+		bclr=4
+	}
+	align="horiz. right"
+	limits {
+	}
+}
+text {
+	object {
+		x=370
+		y=485
+		width=160
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Wait for plugins"
+	align="horiz. right"
+}
+menu {
+	object {
+		x=535
+		y=485
+		width=80
+		height=20
+	}
+	control {
+		chan="$(P)$(R)WaitForPlugins"
+		clr=14
+		bclr=51
+	}
+}
+text {
+	object {
+		x=410
+		y=510
+		width=120
+		height=20
+	}
+	"basic attribute" {
+		clr=14
+	}
+	textix="Acquire busy"
+	align="horiz. right"
+}
+"text update" {
+	object {
+		x=535
+		y=511
+		width=160
+		height=18
+	}
+	monitor {
+		chan="$(P)$(R)AcquireBusy"
+		clr=54
+		bclr=2
+	}
+	clrmod="alarm"
 	format="string"
 	limits {
 	}
