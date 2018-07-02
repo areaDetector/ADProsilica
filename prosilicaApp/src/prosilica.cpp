@@ -39,7 +39,7 @@
 #include <epicsExport.h>
 
 #define DRIVER_VERSION      2
-#define DRIVER_REVISION     4
+#define DRIVER_REVISION     5
 #define DRIVER_MODIFICATION 0
 
 static const char *driverName = "prosilica";
