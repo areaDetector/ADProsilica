@@ -1,6 +1,6 @@
 
 file {
-	name="/home/epics/devel/areaDetector-3-3-1/ADProsilica/prosilicaApp/op/adl/prosilica.adl"
+	name="/home/epics/devel/areaDetector-3-3-2/ADProsilica/prosilicaApp/op/adl/prosilica.adl"
 	version=030109
 }
 display {
@@ -1103,70 +1103,59 @@ composite {
 		x=360
 		y=670
 		width=350
-		height=300
+		height=110
+	}
+	"composite name"=""
+	"composite file"="ADAttrFile.adl"
+}
+composite {
+	object {
+		x=30
+		y=870
+		width=298
+		height=20
 	}
 	"composite name"=""
 	children {
-		composite {
+		text {
 			object {
-				x=360
-				y=670
-				width=350
-				height=110
-			}
-			"composite name"=""
-			"composite file"="ADAttrFile.adl"
-		}
-		composite {
-			object {
-				x=382
-				y=950
-				width=298
+				x=30
+				y=870
+				width=220
 				height=20
 			}
-			"composite name"=""
-			children {
-				text {
-					object {
-						x=382
-						y=950
-						width=220
-						height=20
-					}
-					"basic attribute" {
-						clr=14
-					}
-					textix="I/O setup & statistics"
-					align="horiz. right"
-				}
-				"related display" {
-					object {
-						x=610
-						y=950
-						width=70
-						height=20
-					}
-					display[0] {
-						label="I/O setup & statistics"
-						name="prosilicaMore.adl"
-						args="P=$(P),R=$(R)"
-					}
-					clr=14
-					bclr=51
-				}
+			"basic attribute" {
+				clr=14
 			}
+			textix="I/O setup & statistics"
+			align="horiz. right"
 		}
-		composite {
+		"related display" {
 			object {
-				x=360
-				y=785
-				width=350
-				height=160
+				x=258
+				y=870
+				width=70
+				height=20
 			}
-			"composite name"=""
-			"composite file"="ADBuffers.adl"
+			display[0] {
+				label="I/O setup & statistics"
+				name="prosilicaMore.adl"
+				args="P=$(P),R=$(R)"
+			}
+			clr=14
+			bclr=51
 		}
 	}
+}
+composite {
+	object {
+		x=360
+		y=785
+		width=350
+		height=160
+	}
+	"composite name"=""
+	"composite file"="ADBuffers.adl"
 }
 text {
 	object {
