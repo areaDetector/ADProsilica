@@ -1511,19 +1511,6 @@ release 0
 x 360
 y 670
 w 350
-h 300
-
-beginGroup
-
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 360
-y 670
-w 350
 h 110
 
 beginGroup
@@ -1564,8 +1551,8 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 382
-y 950
+x 30
+y 870
 w 298
 h 20
 
@@ -1577,8 +1564,8 @@ beginObjectProperties
 major 4
 minor 1
 release 1
-x 382
-y 950
+x 30
+y 870
 w 220
 h 20
 font "helvetica-medium-r-14.0"
@@ -1638,11 +1625,6 @@ endGroup
 visMin "A"
 visMax "1"
 endObjectProperties
-
-endGroup
-
-endObjectProperties
-
 
 # (Static Text)
 object activeXTextClass
@@ -2180,20 +2162,8 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 360
-y 670
-w 350
-h 300
-
-beginGroup
-# (Group)
-object activeGroupClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 382
-y 950
+x 30
+y 870
 w 298
 h 20
 
@@ -2205,8 +2175,8 @@ beginObjectProperties
 major 4
 minor 0
 release 0
-x 610
-y 950
+x 258
+y 870
 w 70
 h 20
 fgColor rgb 0 0 0
@@ -2230,11 +2200,6 @@ replaceSymbols {
   0 1
 }
 endObjectProperties
-
-endGroup
-
-endObjectProperties
-
 
 endGroup
 

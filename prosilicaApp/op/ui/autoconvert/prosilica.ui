@@ -3180,148 +3180,138 @@ border-radius: 2px;
                 <enum>caLineEdit::Static</enum>
             </property>
         </widget>
-        <widget class="caFrame" name="caFrame_3">
+        <widget class="caInclude" name="caInclude_3">
+            <property name="geometry">
+                <rect>
+                    <x>360</x>
+                    <y>670</y>
+                    <width>354</width>
+                    <height>114</height>
+                </rect>
+            </property>
             <property name="geometry">
                 <rect>
                     <x>360</x>
                     <y>670</y>
                     <width>352</width>
-                    <height>302</height>
+                    <height>112</height>
                 </rect>
             </property>
-            <widget class="caInclude" name="caInclude_4">
-                <property name="geometry">
-                    <rect>
-                        <x>0</x>
-                        <y>0</y>
-                        <width>354</width>
-                        <height>114</height>
-                    </rect>
+            <property name="filename">
+                <string>ADAttrFile.adl</string>
+            </property>
+            <property name="macro">
+                <string></string>
+            </property>
+        </widget>
+        <widget class="caFrame" name="caFrame_4">
+            <property name="geometry">
+                <rect>
+                    <x>30</x>
+                    <y>870</y>
+                    <width>300</width>
+                    <height>22</height>
+                </rect>
+            </property>
+            <widget class="caLabel" name="caLabel_25">
+                <property name="frameShape">
+                    <enum>QFrame::NoFrame</enum>
+                </property>
+                <property name="foreground">
+                    <color alpha="255">
+                        <red>0</red>
+                        <green>0</green>
+                        <blue>0</blue>
+                    </color>
+                </property>
+                <property name="background">
+                    <color alpha="0">
+                        <red>0</red>
+                        <green>0</green>
+                        <blue>0</blue>
+                    </color>
+                </property>
+                <property name="text">
+                    <string>I/O setup &amp; statistics</string>
+                </property>
+                <property name="fontScaleMode">
+                    <enum>ESimpleLabel::WidthAndHeight</enum>
+                </property>
+                <property name="alignment">
+                    <set>Qt::AlignAbsolute|Qt::AlignRight|Qt::AlignVCenter</set>
                 </property>
                 <property name="geometry">
                     <rect>
                         <x>0</x>
                         <y>0</y>
-                        <width>352</width>
-                        <height>112</height>
+                        <width>220</width>
+                        <height>20</height>
                     </rect>
-                </property>
-                <property name="filename">
-                    <string>ADAttrFile.adl</string>
-                </property>
-                <property name="macro">
-                    <string></string>
                 </property>
             </widget>
-            <widget class="caFrame" name="caFrame_5">
+            <widget class="caRelatedDisplay" name="caRelatedDisplay_0">
                 <property name="geometry">
                     <rect>
-                        <x>22</x>
-                        <y>280</y>
-                        <width>300</width>
-                        <height>22</height>
+                        <x>228</x>
+                        <y>0</y>
+                        <width>70</width>
+                        <height>20</height>
                     </rect>
                 </property>
-                <widget class="caLabel" name="caLabel_25">
-                    <property name="frameShape">
-                        <enum>QFrame::NoFrame</enum>
-                    </property>
-                    <property name="foreground">
-                        <color alpha="255">
-                            <red>0</red>
-                            <green>0</green>
-                            <blue>0</blue>
-                        </color>
-                    </property>
-                    <property name="background">
-                        <color alpha="0">
-                            <red>0</red>
-                            <green>0</green>
-                            <blue>0</blue>
-                        </color>
-                    </property>
-                    <property name="text">
-                        <string>I/O setup &amp; statistics</string>
-                    </property>
-                    <property name="fontScaleMode">
-                        <enum>ESimpleLabel::WidthAndHeight</enum>
-                    </property>
-                    <property name="alignment">
-                        <set>Qt::AlignAbsolute|Qt::AlignRight|Qt::AlignVCenter</set>
-                    </property>
-                    <property name="geometry">
-                        <rect>
-                            <x>0</x>
-                            <y>0</y>
-                            <width>220</width>
-                            <height>20</height>
-                        </rect>
-                    </property>
-                </widget>
-                <widget class="caRelatedDisplay" name="caRelatedDisplay_0">
-                    <property name="geometry">
-                        <rect>
-                            <x>228</x>
-                            <y>0</y>
-                            <width>70</width>
-                            <height>20</height>
-                        </rect>
-                    </property>
-                    <property name="foreground">
-                        <color alpha="255">
-                            <red>0</red>
-                            <green>0</green>
-                            <blue>0</blue>
-                        </color>
-                    </property>
-                    <property name="background">
-                        <color alpha="255">
-                            <red>115</red>
-                            <green>223</green>
-                            <blue>255</blue>
-                        </color>
-                    </property>
-                    <property name="stackingMode">
-                        <enum>Menu</enum>
-                    </property>
-                    <property name="labels">
-                        <string>I/O setup &amp; statistics</string>
-                    </property>
-                    <property name="files">
-                        <string>prosilicaMore.adl</string>
-                    </property>
-                    <property name="args">
-                        <string>P=$(P),R=$(R)</string>
-                    </property>
-                    <property name="removeParent">
-                        <string>false</string>
-                    </property>
-                </widget>
-            </widget>
-            <widget class="caInclude" name="caInclude_6">
-                <property name="geometry">
-                    <rect>
-                        <x>0</x>
-                        <y>115</y>
-                        <width>354</width>
-                        <height>164</height>
-                    </rect>
+                <property name="foreground">
+                    <color alpha="255">
+                        <red>0</red>
+                        <green>0</green>
+                        <blue>0</blue>
+                    </color>
                 </property>
-                <property name="geometry">
-                    <rect>
-                        <x>0</x>
-                        <y>115</y>
-                        <width>352</width>
-                        <height>162</height>
-                    </rect>
+                <property name="background">
+                    <color alpha="255">
+                        <red>115</red>
+                        <green>223</green>
+                        <blue>255</blue>
+                    </color>
                 </property>
-                <property name="filename">
-                    <string>ADBuffers.adl</string>
+                <property name="stackingMode">
+                    <enum>Menu</enum>
                 </property>
-                <property name="macro">
-                    <string></string>
+                <property name="labels">
+                    <string>I/O setup &amp; statistics</string>
+                </property>
+                <property name="files">
+                    <string>prosilicaMore.adl</string>
+                </property>
+                <property name="args">
+                    <string>P=$(P),R=$(R)</string>
+                </property>
+                <property name="removeParent">
+                    <string>false</string>
                 </property>
             </widget>
+        </widget>
+        <widget class="caInclude" name="caInclude_5">
+            <property name="geometry">
+                <rect>
+                    <x>360</x>
+                    <y>785</y>
+                    <width>354</width>
+                    <height>164</height>
+                </rect>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>360</x>
+                    <y>785</y>
+                    <width>352</width>
+                    <height>162</height>
+                </rect>
+            </property>
+            <property name="filename">
+                <string>ADBuffers.adl</string>
+            </property>
+            <property name="macro">
+                <string></string>
+            </property>
         </widget>
         <widget class="caLabel" name="caLabel_26">
             <property name="frameShape">
@@ -4133,11 +4123,10 @@ border-radius: 2px;
         <zorder>caLabel_22</zorder>
         <zorder>caLabel_23</zorder>
         <zorder>caLabel_24</zorder>
-        <zorder>caInclude_4</zorder>
+        <zorder>caInclude_3</zorder>
         <zorder>caLabel_25</zorder>
-        <zorder>caFrame_5</zorder>
-        <zorder>caInclude_6</zorder>
-        <zorder>caFrame_3</zorder>
+        <zorder>caFrame_4</zorder>
+        <zorder>caInclude_5</zorder>
         <zorder>caLabel_26</zorder>
         <zorder>caLabel_27</zorder>
         <zorder>caLabel_28</zorder>
