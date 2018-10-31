@@ -1556,9 +1556,11 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
                 break;
            }
             setIntegerParam(ADStatus, ADStatusAcquire);
+	    setShutter(1);
             status |= PvCommandRun(this->PvHandle, "AcquisitionStart");
         } else {
             setIntegerParam(ADStatus, ADStatusIdle);
+	    setShutter(0);
             status |= PvCommandRun(this->PvHandle, "AcquisitionAbort");
         }
     } else if (function == ADTriggerMode) {
