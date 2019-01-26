@@ -773,6 +773,7 @@ void prosilica::frameCallback(tPvFrame *pFrame)
         /* See if acquisition is done */
         if (this->framesRemaining > 0) this->framesRemaining--;
         if (this->framesRemaining == 0) {
+            setShutter(0);
             setIntegerParam(ADAcquire, 0);
             setIntegerParam(ADStatus, ADStatusIdle);
         }
@@ -1556,9 +1557,11 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
                 break;
            }
             setIntegerParam(ADStatus, ADStatusAcquire);
+            setShutter(1);
             status |= PvCommandRun(this->PvHandle, "AcquisitionStart");
         } else {
             setIntegerParam(ADStatus, ADStatusIdle);
+            setShutter(0);
             status |= PvCommandRun(this->PvHandle, "AcquisitionAbort");
         }
     } else if (function == ADTriggerMode) {
