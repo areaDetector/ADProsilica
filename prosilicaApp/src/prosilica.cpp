@@ -84,6 +84,8 @@ protected:
     int PSReadStatistics;
     #define FIRST_PS_PARAM PSReadStatistics
     int PSBayerConvert;
+    int PSGainMode;
+    int PSExposureMode;
     int PSDriverType;
     int PSFilterVersion;
     int PSTimestampType;
@@ -251,13 +253,28 @@ static const char *PSStrobeModes[] = {
     "SyncIn4",
 };
 #define NUM_STROBE_MODES (int)(sizeof(PSStrobeModes) / sizeof(PSStrobeModes[0]))
-     
- 
+
+static const char *PSExposureModes[] = {
+    "Manual",
+    "AutoOnce",
+    "Auto",
+    "External",
+};
+#define NUM_EXPOSURE_MODES (int)(sizeof(PSExposureModes) / sizeof(PSExposureModes[0]))
+
+static const char *PSGainModes[] = {
+    "Manual",
+    "AutoOnce",
+    "Auto",
+};
+#define NUM_GAIN_MODES (int)(sizeof(PSGainModes) / sizeof(PSGainModes[0]))
 
 /** Driver-specific parameters for the Prosilica driver */
     /*                                       String              asyn interface  access   Description  */
 #define PSReadStatisticsString       "PS_READ_STATISTICS"      /* (asynInt32,    r/w) Write to read statistics  */ 
 #define PSBayerConvertString         "PS_BAYER_CONVERT"        /* (asynInt32,    r/w) Convert Bayer to another format */ 
+#define PSGainModeString             "PS_GAIN_MODE"            /* (asynInt32,    r/w) Camera gain mode, manual or auto */
+#define PSExposureModeString         "PS_EXPOSURE_MODE"        /* (asynInt32,    r/w) Camera exposure mode, manual or auto */
 #define PSDriverTypeString           "PS_DRIVER_TYPE"          /* (asynOctet,    r/o) Ethernet driver type */ 
 #define PSFilterVersionString        "PS_FILTER_VERSION"       /* (asynOctet,    r/o) Ethernet packet filter version */ 
 #define PSTimestampTypeString        "PS_TIMESTAMP_TYPE"       /* (asynInt32,    r/w) Choose how the timestamping is performed */
@@ -1199,6 +1216,32 @@ asynStatus prosilica::readParameters()
     dval = intVal;
     status |= setDoubleParam(ADGain, dval);
 
+    /* Exposure mode can be maunal or auto */
+    status |= PvAttrEnumGet(this->PvHandle, "ExposureMode", buffer, sizeof(buffer), &nchars);
+    for (i=0; i<NUM_EXPOSURE_MODES; i++) {
+        if (strcmp(buffer, PSExposureModes[i]) == 0) {
+            status |= setIntegerParam(PSExposureMode, i);
+            break;
+        }
+    }
+    if (i == NUM_EXPOSURE_MODES) {
+        status |= setIntegerParam(PSExposureMode, 0);
+        status |= asynError;
+    }
+    
+    /* Gain mode can be maunal or auto */
+    status |= PvAttrEnumGet(this->PvHandle, "GainMode", buffer, sizeof(buffer), &nchars);
+    for (i=0; i<NUM_GAIN_MODES; i++) {
+        if (strcmp(buffer, PSGainModes[i]) == 0) {
+            status |= setIntegerParam(PSGainMode, i);
+            break;
+        }
+    }
+    if (i == NUM_GAIN_MODES) {
+        status |= setIntegerParam(PSGainMode, 0);
+        status |= asynError;
+    }
+ 
     /* Call the callbacks to update the values in higher layers */
     callParamCallbacks();
     
@@ -1616,6 +1659,10 @@ asynStatus prosilica::writeInt32(asynUser *pasynUser, epicsInt32 value)
             status = setPixelFormat();
     } else if (function == PSResetTimer) {
             status = syncTimer();
+    } else if ( function == PSExposureMode ) {
+            status = PvAttrEnumSet(this->PvHandle, "ExposureMode", PSExposureModes[value]);
+    } else if ( function == PSGainMode ) {
+            status = PvAttrEnumSet(this->PvHandle, "GainMode", PSGainModes[value]);
     } else {
             /* If this is not a parameter we have handled call the base class */
             if (function < FIRST_PS_PARAM) status = ADDriver::writeInt32(pasynUser, value);
@@ -1789,6 +1836,8 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     
     createParam(PSReadStatisticsString,    asynParamInt32,    &PSReadStatistics);
     createParam(PSBayerConvertString,      asynParamInt32,    &PSBayerConvert);
+    createParam(PSGainModeString,          asynParamInt32,    &PSGainMode);
+    createParam(PSExposureModeString,      asynParamInt32,    &PSExposureMode);
     createParam(PSDriverTypeString,        asynParamOctet,    &PSDriverType);
     createParam(PSFilterVersionString,     asynParamOctet,    &PSFilterVersion);
     createParam(PSTimestampTypeString,     asynParamInt32,    &PSTimestampType);
