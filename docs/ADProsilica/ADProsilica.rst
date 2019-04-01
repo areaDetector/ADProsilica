@@ -908,7 +908,7 @@ parameters for the Prosilica detector.
     :align: center
 
 The following is an IDL
-`epics_ad_display <http://cars.uchicago.edu/software/idl/imaging_routines.html#epics_ad_display>`__
+`epics_ad_display <https://cars.uchicago.edu/software/idl/imaging_routines.html#epics_ad_display>`__
 screen displaying the Prosilica detector images.
 
 .. figure:: prosilica_tvscl.jpg
