@@ -889,8 +889,14 @@ documentation <../areaDetectorDoxygenHTML/prosilica_8cpp.html>`__ and in
 the documentation for the constructor for the `prosilica
 class <areaDetectorDoxygenHTML/classprosilica.html>`__.
 
-There an example IOC boot directory and startup script
-:doc:`st_cmd` provided with
+
+.. toctree::
+   :hidden:
+   
+   st_cmd.rst
+
+There is an example IOC boot directory and startup script
+:ref:`st.cmd <ADProsilica_st_cmd_example>` provided with
 areaDetector.
 
 MEDM screens
