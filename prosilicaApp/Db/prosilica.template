@@ -947,3 +947,33 @@ record(longout, "$(P)$(R)PSResetTimer")
    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_RESET_TIMER")
 }
 
+
+###############################################################################
+# Read Temperatures from Camera                                              #
+###############################################################################
+record(longout, "$(P)$(R)PSReadTemp")
+{
+   field(DTYP, "asynInt32")
+   field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_READ_TEMP")
+   field(SCAN, "5 second")
+}
+
+record(ai, "$(P)$(R)PSMainboardTemp")
+{
+   field(DTYP, "asynFloat64")
+   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_MAINBOARD_TEMP")
+   field(EGU,  "°C")
+   field(PREC, "1")
+   field(SCAN, "I/O Intr")
+}
+
+record(bi, "$(P)$(R)PSCCDTempOk")
+{
+   field(DTYP, "asynInt32")
+   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_CCD_TEMP_OK")
+   field(SCAN, "I/O Intr")
+   field(ZNAM, "CCD temp too hot")
+   field(ONAM, "CCD temp OK")
+}
+
+
