@@ -947,3 +947,21 @@ record(longout, "$(P)$(R)PSResetTimer")
    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_RESET_TIMER")
 }
 
+###############################################################################
+#  These records are for temperature readout                                  #
+###############################################################################
+record(ai, "$(P)$(R)TemperatureSensor_RBV")
+{
+   field(DTYP, "asynFloat64")
+   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_TEMPERATURE_SENSOR")
+   field(PREC, "2")
+   field(SCAN, "I/O Intr")
+}
+
+record(ai, "$(P)$(R)TemperatureMainboard_RBV")
+{
+   field(DTYP, "asynFloat64")
+   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PS_TEMPERATURE_MAINBOARD")
+   field(PREC, "2")
+   field(SCAN, "I/O Intr")
+}
