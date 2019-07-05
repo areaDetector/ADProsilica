@@ -121,8 +121,7 @@ protected:
     int PSStrobe1CtlDuration;
     int PSStrobe1Duration;
     int PSTemperatureMainboard;
-    int PSTemperatureSensor;
-    #define LAST_PS_PARAM PSTemperatureSensor
+    #define LAST_PS_PARAM PSTemperatureMainboard
 private:                                        
     /* These are the methods that are new to this class */
     asynStatus setPixelFormat();
@@ -312,7 +311,6 @@ static const char *PSGainModes[] = {
 #define PSStrobe1CtlDurationString   "PS_STROBE_1_CTL_DURATION"/* (asynInt32,    r/w) Strobe 1 controlled duration */
 #define PSStrobe1DurationString      "PS_STROBE_1_DURATION"    /* (asynFloat64,  r/w) Strobe 1 duration */
 #define PSTemperatureMainboardString "PS_TEMPERATURE_MAINBOARD"/* (asynFloat64,  r/o) Device temperature mainboard*/
-#define PSTemperatureSensorString    "PS_TEMPERATURE_SENSOR"   /* (asynFloat64,  r/o) Device temperature sensor */
 
 
 void prosilica::shutdown (void* arg) {
@@ -1080,9 +1078,9 @@ asynStatus prosilica::readStats()
     /* This parameter can be not supported */
     if (status == ePvErrNotFound) {
         status = 0;
-        status |= setDoubleParam(PSTemperatureSensor, 0.);
+        status |= setDoubleParam(ADTemperatureActual, 0.);
     } else if (status == 0) {
-        status |= setDoubleParam(PSTemperatureSensor, fval);
+        status |= setDoubleParam(ADTemperatureActual, fval);
     }
 
     status |= PvAttrEnumGet(this->PvHandle, "SyncOut1Invert", buffer, sizeof(buffer), &nchars);
@@ -1896,7 +1894,6 @@ prosilica::prosilica(const char *portName, const char *cameraId, int maxBuffers,
     createParam(PSStrobe1CtlDurationString,  asynParamInt32,    &PSStrobe1CtlDuration);
     createParam(PSStrobe1DurationString,     asynParamFloat64,  &PSStrobe1Duration);
     createParam(PSTemperatureMainboardString,asynParamFloat64,  &PSTemperatureMainboard);
-    createParam(PSTemperatureSensorString,   asynParamFloat64,  &PSTemperatureSensor);
 
     /* There is a conflict with readline use of signals, don't use readline signal handlers */
 #ifdef linux
