@@ -4259,7 +4259,7 @@ border-radius: 2px;
                 <enum>caLineEdit::WidthAndHeight</enum>
             </property>
             <property name="channel">
-                <string>$(P)$(R)TemperatureMainBoard_RBV</string>
+                <string>$(P)$(R)TemperatureMainboard_RBV</string>
             </property>
             <property name="foreground">
                 <color alpha="255">
@@ -4349,7 +4349,7 @@ border-radius: 2px;
                 <enum>caLineEdit::WidthAndHeight</enum>
             </property>
             <property name="channel">
-                <string>$(P)$(R)TemperatureActual_RBV</string>
+                <string>$(P)$(R)TemperatureActual</string>
             </property>
             <property name="foreground">
                 <color alpha="255">

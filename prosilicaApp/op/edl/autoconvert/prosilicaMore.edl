@@ -1823,7 +1823,7 @@ x 236
 y 909
 w 120
 h 15
-controlPv "$(P)$(R)TemperatureMainBoard_RBV"
+controlPv "$(P)$(R)TemperatureMainboard_RBV"
 format "decimal"
 font "helvetica-medium-r-12.0"
 fontAlign "center"
@@ -1867,7 +1867,7 @@ x 236
 y 929
 w 120
 h 15
-controlPv "$(P)$(R)TemperatureActual_RBV"
+controlPv "$(P)$(R)TemperatureActual"
 format "decimal"
 font "helvetica-medium-r-12.0"
 fontAlign "center"
