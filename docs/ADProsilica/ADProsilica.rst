@@ -1,5 +1,5 @@
-areaDetector Prosilica driver
-=============================
+ADProsilica
+===========
 
 :author: Mark Rivers, University of Chicago
 
