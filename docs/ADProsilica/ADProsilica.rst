@@ -65,780 +65,190 @@ Prosilica specific parameters
 The Prosilica driver implements the following parameters in addition to
 those in asynNDArrayDriver.h and ADDriver.h:
 
-.. raw:: html
+.. cssclass:: table-bordered table-striped table-hover
+.. flat-table::
+  :header-rows: 2
+  :widths: 60 20 20
 
-  <table class="table table-bordered"> 
-    <tbody>
-      <tr>
-        <td align="center" colspan="7,">
-          <b>Parameter Definitions in prosilica.cpp and EPICS Record Definitions in prosilica.template</b>
-        </td>
-      </tr>
-      <tr>
-        <th>
-          Parameter index variable</th>
-        <th>
-          asyn interface</th>
-        <th>
-          Access</th>
-        <th>
-          Description</th>
-        <th>
-          drvInfo string</th>
-        <th>
-          EPICS record name</th>
-        <th>
-          EPICS record type</th>
-      </tr>
-      <tr>
-        <td align="center" colspan="7,">
-          <b>Bayer Color Conversion</b></td>
-      </tr>
-      <tr>
-        <td>
-          PSBayerConvert</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Color conversion when NDColorMode is Bayer:<br />
-          None: Raw Bayer images are passed to the plugins<br />
-          RGB1: Bayer images are converted to RGB1<br />
-          RGB2: Bayer images are converted to RGB2<br />
-          RGB3: Bayer images are converted to RGB3<br />
-          Having the camera send Bayer images uses 3 times less network bandwidth than 
-          sending RGB1 images.  It does place more CPU load on the host to convert
-          from Bayer to RGB, but this is often an acceptable tradeoff.</td>
-        <td>
-          PS_BAYER_CONVERT</td>
-        <td>
-          $(P)$(R)BayerConvert<br />
-          $(P)$(R)BayerConvert_RBV</td>
-        <td>
-          mbbo
-          <br />
-          mbbi</td>
-      </tr>
-      <tr>
-        <td align="center" colspan="7,">
-          <b>Trigger and I/O Control</b></td>
-      </tr>
-      <tr>
-        <td>
-          PSTriggerEvent</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          The edge or level for the selected trigger signal when ADTriggerMode=Sync In 1 to
-          SyncIn 4. Allowed values are:<br />
-          Rising edge<br />
-          Falling edge<br />
-          Any edge<br />
-          High level<br />
-          Low level </td>
-        <td>
-          PS_TRIGGER_EVENT</td>
-        <td>
-          $(P)$(R)TriggerEvent<br />
-          $(P)$(R)TriggerEvent_RBV</td>
-        <td>
-          mbbo
-          <br />
-          mbbi</td>
-      </tr>
-      <tr>
-        <td>
-          PSTriggerDelay</td>
-        <td>
-          asynFloat64</td>
-        <td>
-          r/w</td>
-        <td>
-          The delay in seconds between the trigger signal and when the frame is actually acquired.
-          Minimum value is 1 microsecond. </td>
-        <td>
-          PS_TRIGGER_DELAY</td>
-        <td>
-          $(P)$(R)TriggerDelay<br />
-          $(P)$(R)TriggerDelay_RBV</td>
-        <td>
-          ao
-          <br />
-          ai</td>
-      </tr>
-      <tr>
-        <td>
-          PSTriggerOverlap</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Controls the behavior when an external trigger signal arrives before the camera
-          is ready for the next trigger. Allowed values are:<br />
-          Off - the external trigger is ignored<br />
-          Previous frame - the external trigger is latched and triggers the next frame when
-          the current frame completes<br />
-        </td>
-        <td>
-          PS_TRIGGER_OVERLAP</td>
-        <td>
-          $(P)$(R)TriggerOverlap<br />
-          $(P)$(R)TriggerOverlap_RBV</td>
-        <td>
-          mbbo
-          <br />
-          mbbi</td>
-      </tr>
-      <tr>
-        <td>
-          PSTriggerSoftware</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Processing this record performs a software trigger if ADTriggerMode=Software.
-        </td>
-        <td>
-          PS_TRIGGER_SOFTWARE</td>
-        <td>
-          $(P)$(R)TriggerSoftware</td>
-        <td>
-          bo</td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncIn1Level</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          The level of the Sync In 1 signal</td>
-        <td>
-          PS_SYNC_IN_1_LEVEL</td>
-        <td>
-          $(P)$(R)SyncIn1Level_RBV</td>
-        <td>
-          bi</td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncIn2Level</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          The level of the Sync In 2 signal</td>
-        <td>
-          PS_SYNC_IN_2_LEVEL</td>
-        <td>
-          $(P)$(R)SyncIn2Level_RBV</td>
-        <td>
-          bi</td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncOut1Mode</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          The mode of the Sync Out 1 signal. Allowed values are:
-          <br />
-          GPO (general purpose output)
-          <br />
-          AcqTrigReady
-          <br />
-          FrameTrigReady
-          <br />
-          FrameTrigger
-          <br />
-          Exposing
-          <br />
-          FrameReadout
-          <br />
-          Imaging
-          <br />
-          Acquiring
-          <br />
-          SyncIn1
-          <br />
-          SyncIn2
-          <br />
-          SyncIn3
-          <br />
-          SyncIn4
-          <br />
-          Strobe1
-          <br />
-          Strobe2
-          <br />
-          Strobe3
-          <br />
-          Strobe4
-          <br />
-        </td>
-        <td>
-          PS_SYNC_OUT_1_MODE</td>
-        <td>
-          $(P)$(R)SyncOut1Mode
-          <br />
-          $(P)$(R)SyncOut1Mode_RBV </td>
-        <td>
-          mbbo
-          <br />
-          mbbi </td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncOut1Level</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          The level of the Sync Out 1 signal. This is only programmable when SyncOut1Mode=GPO.
-        </td>
-        <td>
-          PS_SYNC_OUT_1_LEVEL</td>
-        <td>
-          $(P)$(R)SyncOut1Level<br />
-          $(P)$(R)SyncOut1Level_RBV</td>
-        <td>
-          bo<br />
-          bi</td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncOut1Invert</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Flag to invert the Sync Out 1 signal.</td>
-        <td>
-          PS_SYNC_OUT_1_INVERT</td>
-        <td>
-          $(P)$(R)SyncOut1Invert<br />
-          $(P)$(R)SyncOut1Invert_RBV</td>
-        <td>
-          bo<br />
-          bi</td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncOut2Mode</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          The mode of the Sync Out 2 signal. Allowed values are the same as for PSSyncOut1Mode.
-        </td>
-        <td>
-          PS_SYNC_OUT_2_MODE</td>
-        <td>
-          $(P)$(R)SyncOut2Mode
-          <br />
-          $(P)$(R)SyncOut2Mode_RBV </td>
-        <td>
-          mbbo
-          <br />
-          mbbi </td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncOut2Level</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          The level of the Sync Out 2 signal. This is only programmable when SyncOut2Mode=GPO.
-        </td>
-        <td>
-          PS_SYNC_OUT_2_LEVEL</td>
-        <td>
-          $(P)$(R)SyncOut2Level<br />
-          $(P)$(R)SyncOut1Level_RBV</td>
-        <td>
-          bo<br />
-          bi</td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncOut2Invert</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Flag to invert the Sync Out 2 signal.</td>
-        <td>
-          PS_SYNC_OUT_2_INVERT</td>
-        <td>
-          $(P)$(R)SyncOut2Invert<br />
-          $(P)$(R)SyncOut2Invert_RBV</td>
-        <td>
-          bo<br />
-          bi</td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncOut3Mode</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          The mode of the Sync Out 3 signal. Allowed values are the same as for PSSyncOut1Mode.
-        </td>
-        <td>
-          PS_SYNC_OUT_3_MODE</td>
-        <td>
-          $(P)$(R)SyncOut3Mode
-          <br />
-          $(P)$(R)SyncOut3Mode_RBV </td>
-        <td>
-          mbbo
-          <br />
-          mbbi </td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncOut3Level</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          The level of the Sync Out 3 signal. This is only programmable when SyncOut3Mode=GPO.
-        </td>
-        <td>
-          PS_SYNC_OUT_3_LEVEL</td>
-        <td>
-          $(P)$(R)SyncOut3Level<br />
-          $(P)$(R)SyncOut3Level_RBV</td>
-        <td>
-          bo<br />
-          bi</td>
-      </tr>
-      <tr>
-        <td>
-          PSSyncOut3Invert</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Flag to invert the Sync Out 3 signal.</td>
-        <td>
-          PS_SYNC_OUT_3_INVERT</td>
-        <td>
-          $(P)$(R)SyncOut3Invert<br />
-          $(P)$(R)SyncOut3Invert_RBV</td>
-        <td>
-          bo<br />
-          bi</td>
-      </tr>
-      <tr>
-        <td>
-          PSStrobe1Mode</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          The mode of the Strobe 1 signal. The Strobe signals are based on the following values,
-          but allow for changing the delay and width relative to the underlying value. Any
-          of the outputs can be set to the Stobe1 value, rather than the raw values of these
-          signals. Allowed values are:
-          <br />
-          AcqTrigReady
-          <br />
-          FrameTrigReady
-          <br />
-          FrameTrigger
-          <br />
-          Exposing
-          <br />
-          FrameReadout
-          <br />
-          Acquiring
-          <br />
-          SyncIn1
-          <br />
-          SyncIn2
-          <br />
-          SyncIn3
-          <br />
-          SyncIn4
-          <br />
-        </td>
-        <td>
-          PS_STROBE_1_MODE</td>
-        <td>
-          $(P)$(R)Strobe1Mode
-          <br />
-          $(P)$(R)Strobe1Mode_RBV </td>
-        <td>
-          mbbo
-          <br />
-          mbbi </td>
-      </tr>
-      <tr>
-        <td>
-          PSStrobe1CtlDuration</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Flag to allow controlling the strobe duration.</td>
-        <td>
-          PS_STROBE_1_CTL_DURATION</td>
-        <td>
-          $(P)$(R)Strobe1CtlDuration<br />
-          $(P)$(R)Strobe1CtlDuration_RBV</td>
-        <td>
-          bo<br />
-          bi</td>
-      </tr>
-      <tr>
-        <td>
-          PSStrobe1Duration</td>
-        <td>
-          asynFloat64</td>
-        <td>
-          r/w</td>
-        <td>
-          The strobe duration if PSStrobe1CtlDuration is On.</td>
-        <td>
-          PS_STROBE_1_DURATION</td>
-        <td>
-          $(P)$(R)Strobe1Duration<br />
-          $(P)$(R)Strobe1Duration_RBV</td>
-        <td>
-          ao<br />
-          ai</td>
-      </tr>
-      <tr>
-        <td>
-          PSStrobe1Delay</td>
-        <td>
-          asynFloat64</td>
-        <td>
-          r/w</td>
-        <td>
-          The strobe delay relative to the underlying signal that the strobe is based on.
-        </td>
-        <td>
-          PS_STROBE_1_DELAY</td>
-        <td>
-          $(P)$(R)Strobe1Delay<br />
-          $(P)$(R)Strobe1Delay_RBV</td>
-        <td>
-          ao<br />
-          ai</td>
-      </tr>
-      <tr>
-        <td align="center" colspan="7,">
-          <b>Timestamp Control</b></td>
-      </tr>
-      <tr>
-        <td>
-          PSResetTimer</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Resets the timestamp timer in the camera. If PSTimestampType is POSIX or EPICS then
-          it also stores the current POSIX or EPICS time in the driver.</td>
-        <td>
-          PS_RESET_TIMER</td>
-        <td>
-          $(P)$(R)PSResetTimer</td>
-        <td>
-          longout</td>
-      </tr>
-      <tr>
-        <td>
-          PSTimestampType</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Controls the type of timestamp in the timeStamp field of each NDArray. Choices are:
-          <ul>
-            <li>NativeTicks: The number of internal camera clock ticks which have elapsed since
-              the last timer reset.</li>
-            <li>NativeSeconds: The number of seconds which have elapsed since the last timer reset.
-              This is NativeTicks divided by the internal camera clock frequency.</li>
-            <li>POSIX: The number of seconds since the POSIX Epoch (00:00:00 UTC, January 1, 1970).</li>
-            <li>EPICS The number of seconds since the EPICS Epoch (January 1, 1990).</li>
-          </ul>
-          The POSIX and EPICS timestamps are calculated as follows: when the timer is reset
-          the current POSIX or EPICS time is stored, and the internal camera timer is reset.
-          The timestamps are then computed by adding the camera ticks (converted to seconds)
-          to the stored POSIX or EPICS time. Thus, the relative times of each frame are accurately
-          controlled by the internal camera clock. The accuracy of the absolute time is determined
-          by the accuracy of the time of day clock in the IOC computer.</td>
-        <td>
-          PS_TIMESTAMP_TYPE</td>
-        <td>
-          $(P)$(R)PSTimestampType<br />
-          $(P)$(R)PSTimestampType_RBV</td>
-        <td>
-          mbbo<br />
-          mbbi</td>
-      </tr>
-      <tr>
-        <td align="center" colspan="7,">
-          <b>Statistics Information</b></td>
-      </tr>
-      <tr>
-        <td>
-          PSReadStatistics</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Read the Gigabit Ethernet statistics when 1</td>
-        <td>
-          PS_READ_STATISTICS</td>
-        <td>
-          $(P)$(R)PSReadStatistics</td>
-        <td>
-          longout</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatDriverType</td>
-        <td>
-          asynOctet</td>
-        <td>
-          r/o</td>
-        <td>
-          Driver type</td>
-        <td>
-          PS_DRIVER_TYPE</td>
-        <td>
-          $(P)$(R)PSDriverType_RBV</td>
-        <td>
-          stringin</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatFilterVersion</td>
-        <td>
-          asynOctet</td>
-        <td>
-          r/o</td>
-        <td>
-          Packet filter version</td>
-        <td>
-          PS_FILTER_VERSION</td>
-        <td>
-          $(P)$(R)PSFilterVersion_RBV</td>
-        <td>
-          stringin</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatFrameRate</td>
-        <td>
-          asynFloat64</td>
-        <td>
-          r/o</td>
-        <td>
-          Frame rate (Hz)</td>
-        <td>
-          PS_FRAME_RATE</td>
-        <td>
-          $(P)$(R)PSFrameRate_RBV</td>
-        <td>
-          ai</td>
-      </tr>
-      <tr>
-        <td>
-          PSByteRate</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/w</td>
-        <td>
-          Stream bytes per second in the PvAPI driver. This allows limiting the bandwidth
-          that a camera uses. It also allows operation of GigE cameras on non-Gigabit Ethernet
-          networks by decreasing the value to maximum that the network supports. The default
-          of 115000000 allows full-speed operation on GigE networks.</td>
-        <td>
-          PS_BYTE_RATE</td>
-        <td>
-          $(P)$(R)PSByteRate<br />
-          $(P)$(R)PSByteRate_RBV</td>
-        <td>
-          longout<br />
-          longin</td>
-      </tr>
-      <tr>
-        <td>
-          PSPacketSize</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          Actual packet size of Ethernet packets. When connecting to the camera the driver
-          always automatically negotiates the largest packet size that the camera and IOC
-          computer support. </td>
-        <td>
-          PS_PACKET_SIZE</td>
-        <td>
-          $(P)$(R)PSPacketSize_RBV</td>
-        <td>
-          longin</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatFramesCompleted</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          Number of frames completed</td>
-        <td>
-          PS_FRAMES_COMPLETED</td>
-        <td>
-          $(P)$(R)PSFramesCompleted_RBV</td>
-        <td>
-          longin</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatFramesDropped</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          Number of frames dropped</td>
-        <td>
-          PS_FRAMES_DROPPED</td>
-        <td>
-          $(P)$(R)PSFramesDropped_RBV</td>
-        <td>
-          longin</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatPacketsErroneous</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          Number of erroneous packets</td>
-        <td>
-          PS_PACKETS_ERRONEOUS</td>
-        <td>
-          $(P)$(R)PSPacketsErroneous_RBV</td>
-        <td>
-          longin</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatPacketsMissed</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          Number of missed packets</td>
-        <td>
-          PS_PACKETS_MISSED</td>
-        <td>
-          $(P)$(R)PSPacketsMissed_RBV</td>
-        <td>
-          longin</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatPacketsReceived</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          Number of received packets</td>
-        <td>
-          PS_PACKETS_RECEIVED</td>
-        <td>
-          $(P)$(R)PSPacketsReceived_RBV</td>
-        <td>
-          longin</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatPacketsRequested</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          Number of packets requested</td>
-        <td>
-          PS_PACKETS_REQUESTED</td>
-        <td>
-          $(P)$(R)PSPacketsRequested_RBV</td>
-        <td>
-          longin</td>
-      </tr>
-      <tr>
-        <td>
-          PSStatPacketsResent</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          Number of packets resent</td>
-        <td>
-          PS_PACKETS_RESENT</td>
-        <td>
-          $(P)$(R)PSPacketsResent_RBV</td>
-        <td>
-          longin</td>
-      </tr>
-      <tr>
-        <td>
-          PSBadFrameCounter</td>
-        <td>
-          asynInt32</td>
-        <td>
-          r/o</td>
-        <td>
-          Number of bad frames</td>
-        <td>
-          PS_BAD_FRAME_COUNTER</td>
-        <td>
-          $(P)$(R)PSBadFrameCounter_RBV</td>
-        <td>
-          longin</td>
-      </tr>
-    </tbody>
-  </table>
+  * - Parameter Definitions in prosilica.cpp and EPICS Record Definitions in prosilica.template
+  * - Description
+    - EPICS record name
+    - EPICS record type
+  * - **Bayer Color Conversion**
+  * - Color conversion when NDColorMode is Bayer.  Choices are:
+
+      - None: Raw Bayer images are passed to the plugins
+      - RGB1: Bayer images are converted to RGB1
+      - RGB2: Bayer images are converted to RGB2
+      - RGB3: Bayer images are converted to RGB3
+      
+      Having the camera send Bayer images uses 3 times less network bandwidth than 
+      sending RGB1 images.  It does place more CPU load on the host to convert
+      from Bayer to RGB, but this is often an acceptable tradeoff.
+    - $(P)$(R)BayerConvert, $(P)$(R)BayerConvert_RBV
+    - mbbo, mbbi
+  * - **Trigger and I/O Control**
+  * - The edge or level for the selected trigger signal when ADTriggerMode=Sync In 1 to
+      SyncIn 4. Allowed values are:, Rising edge, Falling edge, Any edge, High level, Low level
+    - $(P)$(R)TriggerEvent, $(P)$(R)TriggerEvent_RBV
+    - mbbo, mbbi
+  * - The delay in seconds between the trigger signal and when the frame is actually acquired.
+      Minimum value is 1 microsecond.
+    - $(P)$(R)TriggerDelay, $(P)$(R)TriggerDelay_RBV
+    - ao, ai
+  * - Controls the behavior when an external trigger signal arrives before the camera
+      is ready for the next trigger. Allowed values are:, Off - the external trigger is ignored, Previous frame - the external trigger is latched and triggers the next frame when
+      the current frame completes
+    - $(P)$(R)TriggerOverlap, $(P)$(R)TriggerOverlap_RBV
+    - mbbo, mbbi
+  * - Processing this record performs a software trigger if ADTriggerMode=Software.
+    - $(P)$(R)TriggerSoftware
+    - bo
+  * - The level of the Sync In 1 signal
+    - $(P)$(R)SyncIn1Level_RBV
+    - bi
+  * - The level of the Sync In 2 signal
+    - $(P)$(R)SyncIn2Level_RBV
+    - bi
+  * - The mode of the Sync Out 1 signal. Allowed values are:
+
+      - GPO (general purpose output)
+      - AcqTrigReady
+      - FrameTrigReady
+      - FrameTrigger
+      - Exposing
+      - FrameReadout
+      - Imaging
+      - Acquiring
+      - SyncIn1
+      - SyncIn2
+      - SyncIn3
+      - SyncIn4
+      - Strobe1
+      - Strobe2
+      - Strobe3
+      - Strobe4
+    - $(P)$(R)SyncOut1Mode, $(P)$(R)SyncOut1Mode_RBV
+    - mbbo, mbbi
+  * - The level of the Sync Out 1 signal. This is only programmable when SyncOut1Mode=GPO.
+    - $(P)$(R)SyncOut1Level, $(P)$(R)SyncOut1Level_RBV
+    - bo, bi
+  * - Flag to invert the Sync Out 1 signal.
+    - $(P)$(R)SyncOut1Invert, $(P)$(R)SyncOut1Invert_RBV
+    - bo, bi
+  * - The mode of the Sync Out 2 signal. Allowed values are the same as for PSSyncOut1Mode.
+    - $(P)$(R)SyncOut2Mode, $(P)$(R)SyncOut2Mode_RBV
+    - mbbo, mbbi
+  * - The level of the Sync Out 2 signal. This is only programmable when SyncOut2Mode=GPO.
+    - $(P)$(R)SyncOut2Level, $(P)$(R)SyncOut1Level_RBV
+    - bo, bi
+  * - Flag to invert the Sync Out 2 signal.
+    - $(P)$(R)SyncOut2Invert, $(P)$(R)SyncOut2Invert_RBV
+    - bo, bi
+  * - The mode of the Sync Out 3 signal. Allowed values are the same as for PSSyncOut1Mode.
+    - $(P)$(R)SyncOut3Mode, $(P)$(R)SyncOut3Mode_RBV
+    - mbbo, mbbi
+  * - The level of the Sync Out 3 signal. This is only programmable when SyncOut3Mode=GPO.
+    - $(P)$(R)SyncOut3Level, $(P)$(R)SyncOut3Level_RBV
+    - bo, bi
+  * - Flag to invert the Sync Out 3 signal.
+    - $(P)$(R)SyncOut3Invert, $(P)$(R)SyncOut3Invert_RBV
+    - bo, bi
+  * - The mode of the Strobe 1 signal. The Strobe signals are based on the following values,
+      but allow for changing the delay and width relative to the underlying value. Any
+      of the outputs can be set to the Stobe1 value, rather than the raw values of these
+      signals. Allowed values are:
+
+      - AcqTrigReady
+      - FrameTrigReady
+      - FrameTrigger
+      - Exposing
+      - FrameReadout
+      - Acquiring
+      - SyncIn1
+      - SyncIn2
+      - SyncIn3
+      - SyncIn4
+    - $(P)$(R)Strobe1Mode, $(P)$(R)Strobe1Mode_RBV
+    - mbbo, mbbi
+  * - Flag to allow controlling the strobe duration.
+    - $(P)$(R)Strobe1CtlDuration, $(P)$(R)Strobe1CtlDuration_RBV
+    - bo, bi
+  * - The strobe duration if PSStrobe1CtlDuration is On.
+    - $(P)$(R)Strobe1Duration, $(P)$(R)Strobe1Duration_RBV
+    - ao, ai
+  * - The strobe delay relative to the underlying signal that the strobe is based on.
+    - $(P)$(R)Strobe1Delay, $(P)$(R)Strobe1Delay_RBV
+    - ao, ai
+  * - **Timestamp Control**
+  * - Resets the timestamp timer in the camera. If PSTimestampType is POSIX or EPICS then
+      it also stores the current POSIX or EPICS time in the driver.
+    - $(P)$(R)PSResetTimer
+    - longout
+  * - Controls the type of timestamp in the timeStamp field of each NDArray. Choices are:
+      
+      - NativeTicks: The number of internal camera clock ticks which have elapsed since the last timer reset.
+      - NativeSeconds: The number of seconds which have elapsed since the last timer reset.
+        This is NativeTicks divided by the internal camera clock frequency.
+      - POSIX: The number of seconds since the POSIX Epoch (00:00:00 UTC, January 1, 1970).
+      - EPICS The number of seconds since the EPICS Epoch (January 1, 1990).
+
+      The POSIX and EPICS timestamps are calculated as follows: when the timer is reset
+      the current POSIX or EPICS time is stored, and the internal camera timer is reset.
+      The timestamps are then computed by adding the camera ticks (converted to seconds)
+      to the stored POSIX or EPICS time. Thus, the relative times of each frame are accurately
+      controlled by the internal camera clock. The accuracy of the absolute time is determined
+      by the accuracy of the time of day clock in the IOC computer.
+    - $(P)$(R)PSTimestampType, $(P)$(R)PSTimestampType_RBV
+    - mbbo, mbbi
+  * - **Statistics Information**
+  * - Read the Gigabit Ethernet statistics when 1
+    - $(P)$(R)PSReadStatistics
+    - longout
+  * - Driver type
+    - $(P)$(R)PSDriverType_RBV
+    - stringin
+  * - Packet filter version
+    - $(P)$(R)PSFilterVersion_RBV
+    - stringin
+  * - Frame rate (Hz)
+    - $(P)$(R)PSFrameRate_RBV
+    - ai
+  * - Stream bytes per second in the PvAPI driver. This allows limiting the bandwidth
+      that a camera uses. It also allows operation of GigE cameras on non-Gigabit Ethernet
+      networks by decreasing the value to maximum that the network supports. The default
+      of 115000000 allows full-speed operation on GigE networks.
+    - $(P)$(R)PSByteRate, $(P)$(R)PSByteRate_RBV
+    - longout, longin
+  * - Actual packet size of Ethernet packets. When connecting to the camera the driver
+      always automatically negotiates the largest packet size that the camera and IOC
+      computer support.
+    - $(P)$(R)PSPacketSize_RBV
+    - longin
+  * - Number of frames completed
+    - $(P)$(R)PSFramesCompleted_RBV
+    - longin
+  * - Number of frames dropped
+    - $(P)$(R)PSFramesDropped_RBV
+    - longin
+  * - Number of erroneous packets
+    - $(P)$(R)PSPacketsErroneous_RBV
+    - longin
+  * - Number of missed packets
+    - $(P)$(R)PSPacketsMissed_RBV
+    - longin
+  * - Number of received packets
+    - $(P)$(R)PSPacketsReceived_RBV
+    - longin
+  * - Number of packets requested
+    - $(P)$(R)PSPacketsRequested_RBV
+    - longin
+  * - Number of packets resent
+    - $(P)$(R)PSPacketsResent_RBV
+    - longin
+  * - Number of bad frames
+    - $(P)$(R)PSBadFrameCounter_RBV
+    - longin
 
 Configuration
 -------------
@@ -887,7 +297,7 @@ refer to the detailed documentation on the prosilicaConfig function in
 the `prosilica.cpp
 documentation <../areaDetectorDoxygenHTML/prosilica_8cpp.html>`__ and in
 the documentation for the constructor for the `prosilica
-class <areaDetectorDoxygenHTML/classprosilica.html>`__.
+class <../areaDetectorDoxygenHTML/classprosilica.html>`__.
 
 
 .. toctree::
