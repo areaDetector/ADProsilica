@@ -299,6 +299,8 @@ documentation <../areaDetectorDoxygenHTML/prosilica_8cpp.html>`__ and in
 the documentation for the constructor for the `prosilica
 class <../areaDetectorDoxygenHTML/classprosilica.html>`__.
 
+Example st.cmd startup file
+---------------------------
 
 .. toctree::
    :hidden:
