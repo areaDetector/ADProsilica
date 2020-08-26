@@ -191,8 +191,8 @@ those in asynNDArrayDriver.h and ADDriver.h:
       - NativeSeconds: The number of seconds which have elapsed since the last timer reset.
         This is NativeTicks divided by the internal camera clock frequency.
       - POSIX: The number of seconds since the POSIX Epoch (00:00:00 UTC, January 1, 1970).
-      - EPICS The number of seconds since the EPICS Epoch (January 1, 1990).
-      - IOC The number of seconds since the EPICS Epoch (January 1, 1990).
+      - EPICS: The number of seconds since the EPICS Epoch (January 1, 1990).
+      - IOC: The number of seconds since the EPICS Epoch (January 1, 1990).
 
       The POSIX and EPICS timestamps are calculated as follows: when the timer is reset
       the current POSIX or EPICS time is stored, and the internal camera timer is reset.
