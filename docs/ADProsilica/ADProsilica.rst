@@ -192,6 +192,7 @@ those in asynNDArrayDriver.h and ADDriver.h:
         This is NativeTicks divided by the internal camera clock frequency.
       - POSIX: The number of seconds since the POSIX Epoch (00:00:00 UTC, January 1, 1970).
       - EPICS The number of seconds since the EPICS Epoch (January 1, 1990).
+      - IOC The number of seconds since the EPICS Epoch (January 1, 1990).
 
       The POSIX and EPICS timestamps are calculated as follows: when the timer is reset
       the current POSIX or EPICS time is stored, and the internal camera timer is reset.
@@ -199,6 +200,10 @@ those in asynNDArrayDriver.h and ADDriver.h:
       to the stored POSIX or EPICS time. Thus, the relative times of each frame are accurately
       controlled by the internal camera clock. The accuracy of the absolute time is determined
       by the accuracy of the time of day clock in the IOC computer.
+      
+      The IOC timestamp is simply the time returned by epicsTimeGetCurrent(), and does not
+      use the camera tick clock at all.
+
     - $(P)$(R)PSTimestampType, $(P)$(R)PSTimestampType_RBV
     - mbbo, mbbi
   * - **Statistics Information**
