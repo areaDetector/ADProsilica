@@ -33,6 +33,9 @@ PROD_LIBS += prosilica
 # Add vendor library from prosilicaSupport
 PROD_LIBS += PvAPI
 
+# Seem to need to link readline on base 7.0.6.1
+PROD_SYS_LIBS_Linux += readline
+
 include $(ADCORE)/ADApp/commonDriverMakefile
 
 #=============================
