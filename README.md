@@ -14,5 +14,5 @@ Users are encouraged to switch to the [ADVimba](https://github.com/areaDetector/
 which uses the newer AVT Vimba SDK.
 
 Additional information:
-* [Documentation](https://areadetector.github.io/master/ADProsilica/ADProsilica.html)
+* [Documentation](https://areadetector.github.io/areaDetector/ADProsilica/ADProsilica.html)
 * [Release notes and links to source and binary releases](RELEASE.md)
