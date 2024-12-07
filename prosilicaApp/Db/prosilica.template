@@ -167,6 +167,19 @@ record(mbbi, "$(P)$(R)BayerConvert_RBV")
    field(SCAN, "I/O Intr")
 }
 
+record(ao, "$(P)$(R)Gain")
+{
+   field(PINI, "YES")
+   field(DTYP, "asynFloat64")
+   field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))GAIN")
+   field(VAL,  "1.0")
+   field(DRVL, "0.0")
+   field(DRVH, "31.0")
+   field(LOPR, "0.0")
+   field(HOPR, "31.0")
+   field(PREC, "3")
+}
+
 ###############################################################################
 #  These records are for gain mode control                                    #
 ###############################################################################
