@@ -9,6 +9,8 @@ who purchased Prosilica.
 The driver is supported under Windows, Linux and Mac OS X using the 
 vendor library provided for those operating systems.
 
+**This repository is no longer active and was archived on June 13, 2025.**
+
 **NOTE:** This driver uses the legacy Prosilica PvAPI SDK.
 Users are encouraged to switch to the [ADVimba](https://github.com/areaDetector/ADVimba) driver,
 which uses the newer AVT Vimba SDK.
